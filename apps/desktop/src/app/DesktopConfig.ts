@@ -45,11 +45,13 @@ export const DesktopConfig = Config.all({
   desktopLanHostOverride: trimmedString("CODA_DESKTOP_LAN_HOST"),
   desktopHttpsEndpointUrls: commaSeparatedStrings("CODA_DESKTOP_HTTPS_ENDPOINTS"),
   otlpTracesUrl: trimmedString("CODA_OTLP_TRACES_URL"),
-  otlpExportIntervalMs: Config.int("CODA_OTLP_EXPORT_INTERVAL_MS").pipe(
-    Config.withDefault(10_000),
-  ),
+  otlpExportIntervalMs: Config.int("CODA_OTLP_EXPORT_INTERVAL_MS").pipe(Config.withDefault(10_000)),
   appImagePath: trimmedString("APPIMAGE"),
   disableAutoUpdate: optionalBoolean("CODA_DISABLE_AUTO_UPDATE"),
+  // Opt-in rather than automatic: a dev build is the daily driver when working
+  // on Coda from inside Coda, and a detached inspector on every launch is noise
+  // there. `CODA_DESKTOP_DEVTOOLS=1` brings the old behaviour back.
+  openDevToolsOnStartup: optionalBoolean("CODA_DESKTOP_DEVTOOLS"),
   mockUpdates: optionalBoolean("CODA_DESKTOP_MOCK_UPDATES"),
   mockUpdateServerPort: Config.port("CODA_DESKTOP_MOCK_UPDATE_SERVER_PORT").pipe(
     Config.withDefault(3000),
