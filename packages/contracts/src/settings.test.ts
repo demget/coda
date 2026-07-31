@@ -33,6 +33,23 @@ describe("ClientSettings word wrap", () => {
   });
 });
 
+describe("ClientSettings voice transcription", () => {
+  it("defaults the client-local Gemini key to empty", () => {
+    expect(decodeClientSettings({}).voiceTranscriptionGeminiApiKey).toBe("");
+  });
+
+  it("trims Gemini keys in settings and patches", () => {
+    expect(
+      decodeClientSettings({ voiceTranscriptionGeminiApiKey: "  test-key  " })
+        .voiceTranscriptionGeminiApiKey,
+    ).toBe("test-key");
+    expect(
+      decodeClientSettingsPatch({ voiceTranscriptionGeminiApiKey: "  next-key  " })
+        .voiceTranscriptionGeminiApiKey,
+    ).toBe("next-key");
+  });
+});
+
 describe("ClientSettings glass opacity", () => {
   it("defaults to a readable translucent surface", () => {
     expect(decodeClientSettings({}).glassOpacity).toBe(80);

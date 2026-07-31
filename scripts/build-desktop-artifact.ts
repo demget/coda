@@ -1568,6 +1568,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
+      extendInfo: {
+        NSMicrophoneUsageDescription:
+          "Coda uses the microphone when you choose to dictate a chat message.",
+      },
       protocols: [
         {
           name: "Coda",

@@ -33,6 +33,7 @@ const clientSettings: ClientSettings = {
   sidebarV2Enabled: false,
   sidebarV2ConfiguredByUser: false,
   timestampFormat: "24-hour",
+  voiceTranscriptionGeminiApiKey: "test-gemini-key",
   wordWrap: true,
 };
 
