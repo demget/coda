@@ -51,11 +51,11 @@ export function formatServiceStatus(
     return "Coda service\n  Status: unavailable on this machine\n  Supported on: Linux with systemd";
   }
   if (!status.installed) {
-    return "Coda service\n  Status: not installed\n  Next: Run `t3 service install`.";
+    return "Coda service\n  Status: not installed\n  Next: Run `coda service install`.";
   }
   return [
     "Coda service",
-    `  Status: ${status.current ? `installed · t3@${cliVersion}` : "needs an update or repair"}`,
+    `  Status: ${status.current ? `installed · coda@${cliVersion}` : "needs an update or repair"}`,
     `  Unit: ${status.unitPath}`,
     `  Logs: ${status.logPath}`,
     ...(status.current ? [] : ["  Next: Run `npx coda@latest service update`."]),
@@ -79,13 +79,11 @@ const serviceInstallCommand = Command.make("install", projectLocationFlags).pipe
       Effect.gen(function* () {
         const result = yield* reconcileService();
         if (!result.changed) {
-          yield* Console.log(
-            `Coda service is already installed with t3@${packageJson.version}.`,
-          );
+          yield* Console.log(`Coda service is already installed with coda@${packageJson.version}.`);
           return;
         }
         yield* Console.log(
-          `${result.previouslyInstalled ? "Updated" : "Installed"} Coda service with t3@${packageJson.version}.\nLogs: ${result.plan.logPath}`,
+          `${result.previouslyInstalled ? "Updated" : "Installed"} Coda service with coda@${packageJson.version}.\nLogs: ${result.plan.logPath}`,
         );
       }),
     ),
@@ -102,11 +100,11 @@ const serviceUpdateCommand = Command.make("update", projectLocationFlags).pipe(
       Effect.gen(function* () {
         const result = yield* reconcileService();
         if (!result.changed) {
-          yield* Console.log(`Coda service is already using t3@${packageJson.version}.`);
+          yield* Console.log(`Coda service is already using coda@${packageJson.version}.`);
           return;
         }
         yield* Console.log(
-          `${result.previouslyInstalled ? "Updated" : "Installed"} Coda service with t3@${packageJson.version}.\nLogs: ${result.plan.logPath}`,
+          `${result.previouslyInstalled ? "Updated" : "Installed"} Coda service with coda@${packageJson.version}.\nLogs: ${result.plan.logPath}`,
         );
       }),
     ),

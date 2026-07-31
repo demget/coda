@@ -190,7 +190,7 @@ describe("ElectronProtocol", () => {
         assert.instanceOf(error, ElectronProtocol.ElectronProtocolUnregistrationError);
         assert.equal(error.scheme, "coda");
         assert.strictEqual(error.cause, cause);
-        assert.equal(error.message, 'Failed to unregister Electron protocol scheme "t3code".');
+        assert.equal(error.message, 'Failed to unregister Electron protocol scheme "coda".');
       }
     }).pipe(Effect.provide(ElectronProtocol.layer)),
   );

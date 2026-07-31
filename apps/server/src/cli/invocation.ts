@@ -43,13 +43,13 @@ export function detectCliRunner(entryPath: string): CliRunner | null {
  * anything else suggests the bare package.
  */
 export function suggestedPackageSpec(version: string): string {
-  return version.includes("-nightly.") ? "coda@nightly" : "t3";
+  return version.includes("-nightly.") ? "coda@nightly" : "coda";
 }
 
 /**
- * Render a `t3 <subcommand>` suggestion that matches how this process was
+ * Render a `coda <subcommand>` suggestion that matches how this process was
  * launched, so copy/pasting it actually works: `npx coda connect` suggests
- * `npx coda serve`, a global install suggests `t3 serve`, and a nightly build
+ * `npx coda serve`, a global install suggests `coda serve`, and a nightly build
  * keeps the `@nightly` tag.
  */
 export function formatCliCommand(input: {
@@ -59,7 +59,7 @@ export function formatCliCommand(input: {
 }): string {
   const runner = detectCliRunner(input.entryPath);
   if (runner === null) {
-    return `t3 ${input.subcommand}`;
+    return `coda ${input.subcommand}`;
   }
   return `${runner} ${suggestedPackageSpec(input.version)} ${input.subcommand}`;
 }

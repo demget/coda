@@ -73,7 +73,7 @@ Depending on your Tailscale setup, this may include:
 The Tailscale HTTPS endpoint uses the clean MagicDNS URL, such as
 `https://machine.tailnet.ts.net/`, and is off until you opt in. Turn on **Enable Tailscale HTTPS**
 on the **Tailscale HTTPS** row in **Settings** → **Connections**. The desktop app restarts the
-backend with the same server-side behavior as `t3 serve --tailscale-serve`, then the server asks
+backend with the same server-side behavior as `coda serve --tailscale-serve`, then the server asks
 Tailscale Serve to proxy HTTPS traffic to the local backend. Turn the same switch off to stop it.
 
 The Tailscale support is an endpoint provider add-on. The core remote model still works without Tailscale: LAN HTTP endpoints, custom HTTPS endpoints, future tunnels, and SSH-launched environments all use the same saved environment and pairing flow.
@@ -84,13 +84,13 @@ For `https://app.t3.codes`, prefer an HTTPS Tailnet or other HTTPS endpoint. A p
 
 Use this when you want to run the server without a GUI, for example on a remote machine over SSH.
 
-Run the server with `t3 serve`.
+Run the server with `coda serve`.
 
 ```bash
 npx coda serve --host "$(tailscale ip -4)"
 ```
 
-`t3 serve` starts the server without opening a browser and prints:
+`coda serve` starts the server without opening a browser and prints:
 
 - a connection string
 - a pairing token
@@ -104,7 +104,7 @@ From there, connect from another device in either of these ways:
 - in the desktop app, enter the host and token separately
 - in the hosted web app, open a hosted pairing URL when the backend is reachable over HTTPS
 
-Use `t3 serve --help` for the full flag reference. It supports the same general startup options as the normal server command, including an optional `cwd` argument.
+Use `coda serve --help` for the full flag reference. It supports the same general startup options as the normal server command, including an optional `cwd` argument.
 
 For hosted web pairing over Tailscale HTTPS, opt in to Tailscale Serve:
 
@@ -186,7 +186,7 @@ The remote device does not need a long-lived secret up front.
 
 Instead:
 
-1. `t3 serve` issues a one-time owner pairing token.
+1. `coda serve` issues a one-time owner pairing token.
 2. The remote device exchanges that token with the server.
 3. The server creates an authenticated session for that device.
 
@@ -208,7 +208,7 @@ Hosted pairing does not proxy traffic through Coda. The browser still connects d
 
 ## Managing Access Later
 
-Use `t3 auth` to manage access after the initial pairing flow.
+Use `coda auth` to manage access after the initial pairing flow.
 
 Typical uses:
 
@@ -216,7 +216,7 @@ Typical uses:
 - inspect active sessions
 - revoke old pairing links or sessions
 
-Use `t3 auth --help` and the nested subcommand help pages for the full reference.
+Use `coda auth --help` and the nested subcommand help pages for the full reference.
 
 ## Security Notes
 
@@ -224,4 +224,4 @@ Use `t3 auth --help` and the nested subcommand help pages for the full reference
 - Prefer binding `--host` to a trusted private address, such as a Tailnet IP, instead of exposing the server broadly.
 - Anyone with a valid pairing credential can create a session until that credential expires or is revoked.
 - Hosted pairing links keep the credential in the URL hash so it is not sent to the hosted app server, but it can still be exposed through browser history, screenshots, logs, or copy/paste.
-- Use `t3 auth` to revoke credentials or sessions you no longer trust.
+- Use `coda auth` to revoke credentials or sessions you no longer trust.

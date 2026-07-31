@@ -13,22 +13,22 @@ import {
 describe("normalizeGitRemoteUrl", () => {
   it("canonicalizes equivalent GitHub remotes across protocol variants", () => {
     expect(normalizeGitRemoteUrl("git@github.com:T3Tools/Coda.git")).toBe(
-      "github.com/t3tools/t3code",
+      "github.com/t3tools/coda",
     );
     expect(normalizeGitRemoteUrl("https://github.com/T3Tools/Coda.git")).toBe(
-      "github.com/t3tools/t3code",
+      "github.com/t3tools/coda",
     );
     expect(normalizeGitRemoteUrl("ssh://git@github.com/T3Tools/Coda")).toBe(
-      "github.com/t3tools/t3code",
+      "github.com/t3tools/coda",
     );
   });
 
   it("preserves nested group paths for providers like GitLab", () => {
     expect(normalizeGitRemoteUrl("git@gitlab.com:T3Tools/platform/Coda.git")).toBe(
-      "gitlab.com/t3tools/platform/t3code",
+      "gitlab.com/t3tools/platform/coda",
     );
     expect(normalizeGitRemoteUrl("https://gitlab.com/T3Tools/platform/Coda.git")).toBe(
-      "gitlab.com/t3tools/platform/t3code",
+      "gitlab.com/t3tools/platform/coda",
     );
   });
 
@@ -44,9 +44,9 @@ describe("normalizeGitRemoteUrl", () => {
 
 describe("parseGitHubRepositoryNameWithOwnerFromRemoteUrl", () => {
   it("extracts the owner and repository from common GitHub remote shapes", () => {
-    expect(
-      parseGitHubRepositoryNameWithOwnerFromRemoteUrl("git@github.com:T3Tools/Coda.git"),
-    ).toBe("T3Tools/Coda");
+    expect(parseGitHubRepositoryNameWithOwnerFromRemoteUrl("git@github.com:T3Tools/Coda.git")).toBe(
+      "T3Tools/Coda",
+    );
     expect(
       parseGitHubRepositoryNameWithOwnerFromRemoteUrl("https://github.com/T3Tools/Coda.git"),
     ).toBe("T3Tools/Coda");
