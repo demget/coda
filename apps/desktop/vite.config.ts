@@ -3,7 +3,20 @@ import { defineConfig } from "vite-plus";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
 const repoEnv = loadRepoEnv();
-const shouldLaunchElectronAfterPack = process.env.CODA_DESKTOP_DEV === "1";
+/**
+ * `CODA_DESKTOP_AUTO_RELAUNCH=0` gives the app a fixed build for its whole
+ * lifetime, for working on Coda from inside Coda: the window you are using is
+ * never restarted out from under you, and picking up new code is a deliberate
+ * re-run of the dev command.
+ *
+ * It has to change how the app is launched, not just whether something restarts
+ * it. `vp pack --watch` re-runs its `onSuccess` command on every rebuild, so the
+ * supervisor that owns the Electron process is itself replaced each time, and
+ * the outgoing one takes its app down with it. Manual mode therefore builds once
+ * and launches the supervisor directly, leaving the watch pipeline out of it.
+ */
+const autoRelaunch = process.env.CODA_DESKTOP_AUTO_RELAUNCH !== "0";
+const shouldLaunchElectronAfterPack = process.env.CODA_DESKTOP_DEV === "1" && autoRelaunch;
 const publicConfigDefine = {
   __CODA_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(
     repoEnv.CODA_CLERK_PUBLISHABLE_KEY?.trim() ?? "",
@@ -19,8 +32,9 @@ export default defineConfig({
         cache: false,
       },
       dev: {
-        command:
-          "node scripts/build-preview-annotation-css.mjs && cross-env CODA_DESKTOP_DEV=1 vp pack --watch",
+        command: autoRelaunch
+          ? "node scripts/build-preview-annotation-css.mjs && cross-env CODA_DESKTOP_DEV=1 vp pack --watch"
+          : "node scripts/build-preview-annotation-css.mjs && vp pack && node scripts/dev-electron.mjs",
         dependsOn: ["coda#build"],
         cache: false,
       },
