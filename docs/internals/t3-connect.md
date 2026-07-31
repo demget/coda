@@ -43,7 +43,7 @@ should set `CODA_CLERK_PUBLISHABLE_KEY`, `CODA_CLERK_JWT_TEMPLATE`,
 production builds only need the Clerk publishable key, JWT template name, and relay URL in their EAS
 environment.
 
-When any client-facing public value is absent, cloud UI is omitted. The `t3 connect` command group is
+When any client-facing public value is absent, cloud UI is omitted. The `coda connect` command group is
 always registered: when the CLI public values are absent, `makeCli` in `apps/server/src/bin.ts`
 registers a hidden fallback `connect` command that reports the missing configuration instead of
 silently vanishing from help. The bundled server still accepts runtime overrides for self-hosted or
@@ -65,7 +65,7 @@ personal developer stage.
 
 ## Headless CLI OAuth Application
 
-The `t3 connect` commands authorize a headless environment with a separate Clerk OAuth application.
+The `coda connect` commands authorize a headless environment with a separate Clerk OAuth application.
 This uses an OAuth public client with PKCE, so the CLI stores no client secret.
 
 In **Clerk Dashboard > OAuth applications**:
@@ -98,19 +98,19 @@ t3 connect unlink
 t3 connect logout
 ```
 
-`t3 serve` is a separate top-level command, not a connect subcommand.
+`coda serve` is a separate top-level command, not a connect subcommand.
 
-`t3 connect login` opens the Clerk authorization flow and stores the CLI credential without enabling
-cloud exposure. `t3 connect link` installs the pinned managed `cloudflared` binary when needed,
+`coda connect login` opens the Clerk authorization flow and stores the CLI credential without enabling
+cloud exposure. `coda connect link` installs the pinned managed `cloudflared` binary when needed,
 authorizes when needed, and records durable intent to expose the environment. It works without a
-running T3 server. The next `t3 serve` or `t3 start` reconciles the relay link and launches the
-managed tunnel. `t3 connect unlink` records disabled intent immediately, stops a reachable running
+running T3 server. The next `coda serve` or `coda start` reconciles the relay link and launches the
+managed tunnel. `coda connect unlink` records disabled intent immediately, stops a reachable running
 connector, and attempts to revoke the relay-side environment record. It retains the stored CLI
-authorization so `t3 connect link` can re-enable exposure without another browser flow. `t3 connect
+authorization so `coda connect link` can re-enable exposure without another browser flow. `coda connect
 logout` performs the same cleanup and removes the stored CLI authorization.
 
 The background service has an independent lifecycle. Connect setup may offer to install it, but
-logout leaves it running; manage it with `t3 service status`, `install`, `update`, and `uninstall`.
+logout leaves it running; manage it with `coda service status`, `install`, `update`, and `uninstall`.
 
 ### Headless and SSH authorization
 

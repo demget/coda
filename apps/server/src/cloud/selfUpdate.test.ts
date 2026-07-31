@@ -81,7 +81,7 @@ const makeRecordingRunnerLayer = (
           return {
             stdout:
               options?.stdoutFor?.(input.command, input.args) ??
-              (versionFromPath === undefined ? "" : `t3 v${versionFromPath}\n`),
+              (versionFromPath === undefined ? "" : `coda v${versionFromPath}\n`),
             stderr: failed ? `${input.command} exploded` : "",
             code: ChildProcessSpawner.ExitCode(failed ? 1 : 0),
             timedOut: false,
@@ -152,7 +152,10 @@ it.layer(NodeServices.layer)("resolveServerSelfUpdateCapability", (it) => {
   it.effect("reports boot-service for the systemd-spawned unit process", () =>
     Effect.gen(function* () {
       const { home, path } = yield* makeHome();
-      const entryPath = path.join(home, ".coda/runtime/versions/0.0.28/node_modules/coda/dist/bin.mjs");
+      const entryPath = path.join(
+        home,
+        ".coda/runtime/versions/0.0.28/node_modules/coda/dist/bin.mjs",
+      );
       yield* writeUnitReferencing(home, entryPath);
       const method = yield* SelfUpdate.resolveServerSelfUpdateCapability({
         desktopManaged: false,
@@ -174,7 +177,10 @@ it.layer(NodeServices.layer)("resolveServerSelfUpdateCapability", (it) => {
   it.effect("does not claim a systemd process owned by another unit", () =>
     Effect.gen(function* () {
       const { home, path } = yield* makeHome();
-      const entryPath = path.join(home, ".coda/runtime/versions/0.0.28/node_modules/coda/dist/bin.mjs");
+      const entryPath = path.join(
+        home,
+        ".coda/runtime/versions/0.0.28/node_modules/coda/dist/bin.mjs",
+      );
       yield* writeUnitReferencing(home, entryPath);
       const method = yield* SelfUpdate.resolveServerSelfUpdateCapability({
         desktopManaged: false,
@@ -192,7 +198,10 @@ it.layer(NodeServices.layer)("resolveServerSelfUpdateCapability", (it) => {
   it.effect("reports respawn for a manual run of the pinned artifact", () =>
     Effect.gen(function* () {
       const { home, path } = yield* makeHome();
-      const entryPath = path.join(home, ".coda/runtime/versions/0.0.28/node_modules/coda/dist/bin.mjs");
+      const entryPath = path.join(
+        home,
+        ".coda/runtime/versions/0.0.28/node_modules/coda/dist/bin.mjs",
+      );
       yield* writeUnitReferencing(home, entryPath);
       // Same unit on disk, but no INVOCATION_ID: restarting the unit would
       // not replace this process, so it must respawn itself instead.
@@ -224,7 +233,10 @@ it.layer(NodeServices.layer)("resolveServerSelfUpdateCapability", (it) => {
       const { home, path } = yield* makeHome();
       // Desktop ownership wins over every process-shape heuristic: even a
       // systemd-looking pinned artifact belongs to the app that spawned it.
-      const entryPath = path.join(home, ".coda/runtime/versions/0.0.28/node_modules/coda/dist/bin.mjs");
+      const entryPath = path.join(
+        home,
+        ".coda/runtime/versions/0.0.28/node_modules/coda/dist/bin.mjs",
+      );
       yield* writeUnitReferencing(home, entryPath);
       const method = yield* SelfUpdate.resolveServerSelfUpdateCapability({
         desktopManaged: true,
@@ -427,7 +439,7 @@ it.layer(NodeServices.layer)("ServerSelfUpdate.update", (it) => {
         },
       });
       const versionDir = context.path.join(context.baseDir, "runtime", "versions", "0.0.29");
-      const entryPath = context.path.join(versionDir, "node_modules", "t3", "dist", "bin.mjs");
+      const entryPath = context.path.join(versionDir, "node_modules", "coda", "dist", "bin.mjs");
       yield* context.fs.makeDirectory(context.path.dirname(entryPath), { recursive: true });
       yield* context.fs.writeFileString(entryPath, "export {};\n");
       yield* context.fs.writeFileString(
@@ -454,7 +466,7 @@ it.layer(NodeServices.layer)("ServerSelfUpdate.update", (it) => {
     Effect.gen(function* () {
       const context = yield* makeContext({
         stdoutFor: (command, args) =>
-          command === NODE_PATH && args[1] === "--version" ? "t3 v0.0.28\n" : undefined,
+          command === NODE_PATH && args[1] === "--version" ? "coda v0.0.28\n" : undefined,
       });
       const versionDir = context.path.join(context.baseDir, "runtime", "versions", "0.0.29");
 

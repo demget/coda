@@ -108,7 +108,7 @@ export const SHOWCASE_PROJECTS = [
     title: "Coda",
     directory: "t3code",
     repositoryUrl: "https://github.com/pingdotgg/t3code.git",
-    favicon: PROJECT_FAVICONS.t3code,
+    favicon: PROJECT_FAVICONS.coda,
   },
   {
     id: "react",
@@ -276,7 +276,7 @@ async function seedCodaWorkspace(workspaceRoot: string): Promise<void> {
     NodePath.join(workspaceRoot, "package.json"),
     `${JSON.stringify({ name: "t3code", private: true, scripts: { test: "vp test" } }, null, 2)}\n`,
   );
-  await NodeFSP.writeFile(NodePath.join(workspaceRoot, "favicon.svg"), PROJECT_FAVICONS.t3code);
+  await NodeFSP.writeFile(NodePath.join(workspaceRoot, "favicon.svg"), PROJECT_FAVICONS.coda);
   await NodeFSP.writeFile(
     NodePath.join(workspaceRoot, "apps/mobile/src/features/home/environmentPresence.ts"),
     BASE_ENVIRONMENT_PRESENCE,

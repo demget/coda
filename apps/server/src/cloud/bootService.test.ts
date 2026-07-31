@@ -158,7 +158,9 @@ it("flags package-manager cache entry points as ephemeral", () => {
   assert.isTrue(
     BootService.isEphemeralCacheEntry("/home/theo/.bun/install/cache/coda@0.0.27/dist/bin.mjs"),
   );
-  assert.isFalse(BootService.isEphemeralCacheEntry("/usr/local/lib/node_modules/coda/dist/bin.mjs"));
+  assert.isFalse(
+    BootService.isEphemeralCacheEntry("/usr/local/lib/node_modules/coda/dist/bin.mjs"),
+  );
   assert.isFalse(
     BootService.isEphemeralCacheEntry(
       "/home/theo/dev/pnpm/dlx-tools/t3/node_modules/coda/dist/bin.mjs",
@@ -262,7 +264,7 @@ it.layer(NodeServices.layer)("BootService", (it) => {
       const runtimeDir = path.join(dirs.baseDir, "runtime", "versions", "0.0.27");
       assert.equal(
         plan.t3EntryPath,
-        path.join(runtimeDir, "node_modules", "t3", "dist", "bin.mjs"),
+        path.join(runtimeDir, "node_modules", "coda", "dist", "bin.mjs"),
       );
       assert.deepEqual(commands[0], {
         command: "npm",

@@ -36,7 +36,7 @@ export function pinnedRuntimePaths(
   const versionDir = path.join(baseDir, PINNED_RUNTIME_DIR, "versions", version);
   return {
     versionDir,
-    entryPath: path.join(versionDir, "node_modules", "t3", "dist", "bin.mjs"),
+    entryPath: path.join(versionDir, "node_modules", "coda", "dist", "bin.mjs"),
     sentinelPath: path.join(versionDir, ".install-complete"),
   };
 }
@@ -113,7 +113,7 @@ export const ensurePinnedRuntimeInstalled = Effect.fn("cloud.pinned_runtime.ensu
               paths.versionDir,
               "--no-fund",
               "--no-audit",
-              `t3@${input.version}`,
+              `coda@${input.version}`,
             ],
             // Native deps (node-pty) can compile from source on slow boxes; the
             // ProcessRunner default of 60s would kill a healthy install.

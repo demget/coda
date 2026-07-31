@@ -151,7 +151,7 @@ export class ServerSelfUpdate extends Context.Service<
       reportProgress?: (stage: ServerSelfUpdateProgressStage) => Effect.Effect<void, never, never>,
     ) => Effect.Effect<ServerSelfUpdateResult, ServerSelfUpdateError>;
   }
->()("t3/cloud/selfUpdate/ServerSelfUpdate") {}
+>()("coda/cloud/selfUpdate/ServerSelfUpdate") {}
 
 export const make = Effect.fn("cloud.server_self_update.make")(function* (options?: {
   readonly host?: Partial<ServerSelfUpdateHost>;
@@ -274,7 +274,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (option
         })
         .pipe(
           Effect.mapError((cause) =>
-            failWith(`Could not verify the installed t3@${targetVersion}.`, cause),
+            failWith(`Could not verify the installed coda@${targetVersion}.`, cause),
           ),
         );
       // Effect CLI's unstable formatVersion currently emits `${name} v${version}`.
@@ -291,13 +291,13 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (option
           path,
         }).pipe(
           Effect.mapError((error) =>
-            failWith(`Could not remove the failed t3@${targetVersion} installation.`, error),
+            failWith(`Could not remove the failed coda@${targetVersion} installation.`, error),
           ),
         );
         return yield* failWith(
           preflight.code !== 0
-            ? `The installed t3@${targetVersion} failed its version check (exit code ${String(preflight.code)}).`
-            : `The installed runtime did not report the requested t3@${targetVersion} version.`,
+            ? `The installed coda@${targetVersion} failed its version check (exit code ${String(preflight.code)}).`
+            : `The installed runtime did not report the requested coda@${targetVersion} version.`,
         );
       }
 

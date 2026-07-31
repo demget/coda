@@ -3,7 +3,10 @@ import { assert, it } from "@effect/vitest";
 import { detectCliRunner, formatCliCommand, suggestedPackageSpec } from "./invocation.ts";
 
 it("detects package runners from their cache entry paths", () => {
-  assert.equal(detectCliRunner("/home/theo/.npm/_npx/abc123/node_modules/coda/dist/bin.mjs"), "npx");
+  assert.equal(
+    detectCliRunner("/home/theo/.npm/_npx/abc123/node_modules/coda/dist/bin.mjs"),
+    "npx",
+  );
   assert.equal(
     detectCliRunner(
       "C:\\Users\\theo\\AppData\\Local\\npm-cache\\_npx\\abc\\node_modules\\coda\\dist\\bin.mjs",
@@ -25,7 +28,10 @@ it("detects package runners from their cache entry paths", () => {
     "pnpm dlx",
   );
   assert.equal(detectCliRunner("/home/theo/.bun/install/cache/coda@0.0.31/dist/bin.mjs"), "bunx");
-  assert.equal(detectCliRunner("/tmp/bunx-1000-coda@latest/node_modules/coda/dist/bin.mjs"), "bunx");
+  assert.equal(
+    detectCliRunner("/tmp/bunx-1000-coda@latest/node_modules/coda/dist/bin.mjs"),
+    "bunx",
+  );
   assert.equal(
     detectCliRunner(
       "C:\\Users\\theo\\AppData\\Local\\Temp\\bunx-0-coda@latest\\node_modules\\coda\\dist\\bin.mjs",
@@ -43,7 +49,7 @@ it("treats stable installs as direct invocations", () => {
 
 it("re-suggests the nightly channel only for nightly builds", () => {
   assert.equal(suggestedPackageSpec("0.0.31-nightly.20260729"), "coda@nightly");
-  assert.equal(suggestedPackageSpec("0.0.31"), "t3");
+  assert.equal(suggestedPackageSpec("0.0.31"), "coda");
 });
 
 it("formats serve suggestions to match the launching command", () => {
@@ -61,7 +67,7 @@ it("formats serve suggestions to match the launching command", () => {
       entryPath: "/tmp/bunx-1000-coda@latest/node_modules/coda/dist/bin.mjs",
       version: "0.0.31",
     }),
-    "bunx t3 serve",
+    "bunx coda serve",
   );
   assert.equal(
     formatCliCommand({
@@ -69,6 +75,6 @@ it("formats serve suggestions to match the launching command", () => {
       entryPath: "/usr/local/lib/node_modules/coda/dist/bin.mjs",
       version: "0.0.31-nightly.20260729",
     }),
-    "t3 serve",
+    "coda serve",
   );
 });

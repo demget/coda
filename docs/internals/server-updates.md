@@ -97,12 +97,12 @@ directory is left in place.
 ## Host Service Lifecycle
 
 The systemd user service is a host lifecycle concern, not a T3 Connect resource. The standalone
-`t3 service install`, `uninstall`, `update`, and `status` commands own it. Install and update both
+`coda service install`, `uninstall`, `update`, and `status` commands own it. Install and update both
 reconcile the unit through `BootService`; running `npx coda@latest service update` therefore pins and
 activates the latest CLI release without requiring a connected client.
 
-The `t3 connect` onboarding flow may offer service installation, but it calls the same reconciliation
-operation as `t3 service install`. Connect logout only disables cloud access and clears its
+The `coda connect` onboarding flow may offer service installation, but it calls the same reconciliation
+operation as `coda service install`. Connect logout only disables cloud access and clears its
 authorization; it does not uninstall the host service.
 
 ## Process Handoff
