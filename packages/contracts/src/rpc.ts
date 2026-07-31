@@ -70,6 +70,8 @@ import {
   RelayClientStatusSchema,
 } from "./relayClient.ts";
 import {
+  ProjectCheckPathsInput,
+  ProjectCheckPathsResult,
   ProjectListEntriesError,
   ProjectListEntriesInput,
   ProjectListEntriesResult,
@@ -167,6 +169,7 @@ export const WS_METHODS = {
   projectsList: "projects.list",
   projectsAdd: "projects.add",
   projectsRemove: "projects.remove",
+  projectsCheckPaths: "projects.checkPaths",
   projectsListEntries: "projects.listEntries",
   projectsReadFile: "projects.readFile",
   projectsSearchContents: "projects.searchContents",
@@ -446,6 +449,14 @@ export const WsProjectsSearchContentsRpc = Rpc.make(WS_METHODS.projectsSearchCon
   payload: ProjectSearchContentsInput,
   success: ProjectSearchContentsResult,
   error: Schema.Union([ProjectSearchContentsError, EnvironmentAuthorizationError]),
+});
+
+// Existence probing never fails as a whole: an unreadable or missing path is
+// reported as such per entry, so clients get one answer per candidate.
+export const WsProjectsCheckPathsRpc = Rpc.make(WS_METHODS.projectsCheckPaths, {
+  payload: ProjectCheckPathsInput,
+  success: ProjectCheckPathsResult,
+  error: EnvironmentAuthorizationError,
 });
 
 export const WsProjectsListEntriesRpc = Rpc.make(WS_METHODS.projectsListEntries, {
@@ -809,6 +820,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,
+  WsProjectsCheckPathsRpc,
   WsProjectsListEntriesRpc,
   WsProjectsReadFileRpc,
   WsProjectsSearchContentsRpc,

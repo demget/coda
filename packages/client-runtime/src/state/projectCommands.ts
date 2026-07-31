@@ -60,6 +60,14 @@ export function createProjectEnvironmentAtoms<R, E>(
       tag: WS_METHODS.projectsSearchEntries,
       staleTimeMs: 15_000,
     }),
+    // Batches are one-shot: the caller keeps its own answer cache, so these
+    // atoms only need to live long enough to deliver a response.
+    checkPaths: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:projects:check-paths",
+      tag: WS_METHODS.projectsCheckPaths,
+      staleTimeMs: 0,
+      idleTtlMs: 5_000,
+    }),
     listEntries: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:projects:list-entries",
       tag: WS_METHODS.projectsListEntries,
