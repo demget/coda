@@ -20,7 +20,9 @@ export const APP_BUNDLE_ID = isDevelopment
   ? `com.coda.app.dev.${devBundleIdSuffix || "local"}`
   : "com.coda.app";
 const APP_PROTOCOL_SCHEMES = isDevelopment ? ["coda-dev"] : ["coda"];
-const LAUNCHER_VERSION = 14;
+const LAUNCHER_VERSION = 15;
+const MICROPHONE_USAGE_DESCRIPTION =
+  "Coda uses the microphone when you choose to dictate a chat message.";
 const defaultIconPath = NodePath.join(desktopDir, "resources", "icon.icns");
 const developmentMacIconPngPath = NodePath.join(
   repoRoot,
@@ -227,6 +229,7 @@ function patchMainBundleInfoPlist(appBundlePath, iconPath, executableName) {
   setPlistString(infoPlistPath, "CFBundleIdentifier", APP_BUNDLE_ID);
   setPlistString(infoPlistPath, "CFBundleExecutable", executableName);
   setPlistString(infoPlistPath, "CFBundleIconFile", "icon.icns");
+  setPlistString(infoPlistPath, "NSMicrophoneUsageDescription", MICROPHONE_USAGE_DESCRIPTION);
   setPlistJson(infoPlistPath, "CFBundleURLTypes", [
     {
       CFBundleURLName: APP_BUNDLE_ID,

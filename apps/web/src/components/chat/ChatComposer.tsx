@@ -94,6 +94,8 @@ import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
 import { ComposerControl, ComposerControlIcon, ComposerSelectControl } from "./ComposerControl";
+import { VoiceTranscriptionButton } from "./VoiceTranscriptionButton";
+import { buildVoiceTranscriptInsertion } from "./voiceTranscription";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
 import { searchSlashCommandItems } from "./composerSlashCommandSearch";
 import {
@@ -382,7 +384,9 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   isConnecting: boolean;
   isEnvironmentUnavailable: boolean;
   hasSendableContent: boolean;
+  voiceTranscriptionApiKey: string;
   preserveComposerFocusOnPointerDown?: boolean;
+  onVoiceTranscript: (transcript: string) => void;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
@@ -398,6 +402,10 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
       {props.isPreparingWorktree ? (
         <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
       ) : null}
+      <VoiceTranscriptionButton
+        apiKey={props.voiceTranscriptionApiKey}
+        onTranscript={props.onVoiceTranscript}
+      />
       <ComposerPrimaryActions
         compact={props.compact}
         pendingAction={props.pendingAction}
@@ -1601,6 +1609,20 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       terminalContextIds: composerTerminalContexts.map((context) => context.id),
     };
   }, [composerCursor, composerTerminalContexts, promptRef]);
+
+  const handleVoiceTranscript = useCallback(
+    (transcript: string) => {
+      const snapshot = readComposerSnapshot();
+      const insertion = buildVoiceTranscriptInsertion(
+        snapshot.value,
+        snapshot.expandedCursor,
+        transcript,
+      );
+      if (!insertion) return;
+      applyPromptReplacement(snapshot.expandedCursor, snapshot.expandedCursor, insertion);
+    },
+    [applyPromptReplacement, readComposerSnapshot],
+  );
 
   const resolveActiveComposerTrigger = useCallback((): {
     snapshot: { value: string; cursor: number; expandedCursor: number };
@@ -3167,7 +3189,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   }
                   isPreparingWorktree={isPreparingWorktree}
                   hasSendableContent={composerSendState.hasSendableContent}
+                  voiceTranscriptionApiKey={settings.voiceTranscriptionGeminiApiKey}
                   preserveComposerFocusOnPointerDown={isMobileViewport}
+                  onVoiceTranscript={handleVoiceTranscript}
                   onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
                   onInterrupt={handleInterruptPrimaryAction}
                   onImplementPlanInNewThread={handleImplementPlanInNewThreadPrimaryAction}

@@ -124,6 +124,15 @@ const configuredAllowedHosts = (process.env.CODA_DEV_ALLOWED_HOSTS ?? "")
   .filter((entry) => entry.length > 0);
 const allowedHosts = [".ts.net", ...configuredAllowedHosts];
 
+// Agent worktrees can live below the repository root. Watching their nested
+// source trees makes this dev server reload for changes that belong to a
+// separate checkout (and can recursively watch an entire second install).
+export const DEV_WATCH_IGNORED = [
+  "**/.claude/worktrees/**",
+  "**/.codex/worktrees/**",
+  "**/apps/server/worktrees/**",
+] as const;
+
 export default defineConfig(() => {
   return {
     assetsInclude: ["**/*.wasm"],
@@ -187,6 +196,9 @@ export default defineConfig(() => {
       port,
       strictPort: true,
       allowedHosts,
+      watch: {
+        ignored: [...DEV_WATCH_IGNORED],
+      },
       ...(devProxyTarget
         ? {
             // One entry per shared prefix; the server's dev catch-all 404s the

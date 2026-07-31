@@ -527,9 +527,11 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(config.appId, "com.coda.app");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
-      assert.deepStrictEqual(mac.protocols, [
-        { name: "Coda", schemes: ["t3code", "coda-dev"] },
-      ]);
+      assert.deepStrictEqual(mac.extendInfo, {
+        NSMicrophoneUsageDescription:
+          "Coda uses the microphone when you choose to dictate a chat message.",
+      });
+      assert.deepStrictEqual(mac.protocols, [{ name: "Coda", schemes: ["t3code", "coda-dev"] }]);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 

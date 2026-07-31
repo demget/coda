@@ -17,6 +17,11 @@ const repoEnv = loadRepoEnv();
  */
 const autoRelaunch = process.env.CODA_DESKTOP_AUTO_RELAUNCH !== "0";
 const shouldLaunchElectronAfterPack = process.env.CODA_DESKTOP_DEV === "1" && autoRelaunch;
+export const DEV_WORKTREE_WATCH_IGNORED = [
+  "**/.claude/worktrees/**",
+  "**/.codex/worktrees/**",
+  "**/apps/server/worktrees/**",
+] as const;
 const publicConfigDefine = {
   __CODA_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(
     repoEnv.CODA_CLERK_PUBLISHABLE_KEY?.trim() ?? "",
@@ -56,6 +61,7 @@ export default defineConfig({
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
       define: publicConfigDefine,
+      ignoreWatch: [...DEV_WORKTREE_WATCH_IGNORED],
       entry: ["src/main.ts"],
       clean: true,
       deps: {
@@ -69,6 +75,7 @@ export default defineConfig({
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
       define: publicConfigDefine,
+      ignoreWatch: [...DEV_WORKTREE_WATCH_IGNORED],
       entry: ["src/preload.ts"],
       deps: {
         // Sandboxed Electron preloads cannot reliably resolve package imports
@@ -82,6 +89,7 @@ export default defineConfig({
       outDir: "dist-electron",
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
+      ignoreWatch: [...DEV_WORKTREE_WATCH_IGNORED],
       entry: ["src/preview-pick-preload.ts"],
       deps: {
         alwaysBundle: (id) => id === "react-grab" || id.startsWith("react-grab/"),
@@ -92,6 +100,7 @@ export default defineConfig({
       outDir: "dist-electron",
       sourcemap: true,
       outExtensions: () => ({ js: ".cjs" }),
+      ignoreWatch: [...DEV_WORKTREE_WATCH_IGNORED],
       entry: ["src/preview-pip-preload.ts"],
     },
   ],

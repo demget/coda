@@ -578,6 +578,10 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat
         ? ["Time format"]
         : []),
+      ...(settings.voiceTranscriptionGeminiApiKey !==
+      DEFAULT_UNIFIED_SETTINGS.voiceTranscriptionGeminiApiKey
+        ? ["Voice input Gemini API key"]
+        : []),
       ...(settings.sidebarThreadPreviewCount !== DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount
         ? ["Visible threads"]
         : []),
@@ -635,6 +639,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.sidebarProjectGroupingMode,
       settings.sidebarThreadPreviewCount,
       settings.timestampFormat,
+      settings.voiceTranscriptionGeminiApiKey,
       settings.wordWrap,
       theme,
     ],
@@ -653,6 +658,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     setTheme("system");
     updateSettings({
       timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
+      voiceTranscriptionGeminiApiKey: DEFAULT_UNIFIED_SETTINGS.voiceTranscriptionGeminiApiKey,
       wordWrap: DEFAULT_UNIFIED_SETTINGS.wordWrap,
       diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,
       environmentIdentificationMode: DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode,
@@ -1663,6 +1669,45 @@ export function GeneralSettingsPanel() {
                 }}
               />
             </div>
+          }
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Voice input">
+        <SettingsRow
+          title="Gemini API key"
+          description="Transcribes microphone recordings directly from this client with Gemini. The key stays in this client’s local settings and is sent only to Google, but browser storage is not a secure vault."
+          status="Speech can be English, Russian, Ukrainian, or a mix of all three."
+          resetAction={
+            settings.voiceTranscriptionGeminiApiKey !==
+            DEFAULT_UNIFIED_SETTINGS.voiceTranscriptionGeminiApiKey ? (
+              <SettingResetButton
+                label="voice input Gemini API key"
+                onClick={() =>
+                  updateSettings({
+                    voiceTranscriptionGeminiApiKey:
+                      DEFAULT_UNIFIED_SETTINGS.voiceTranscriptionGeminiApiKey,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <>
+              <label className="sr-only" htmlFor="voice-transcription-gemini-api-key">
+                Gemini API key for voice transcription
+              </label>
+              <DraftInput
+                id="voice-transcription-gemini-api-key"
+                className="w-full sm:w-72"
+                value={settings.voiceTranscriptionGeminiApiKey}
+                onCommit={(next) => updateSettings({ voiceTranscriptionGeminiApiKey: next })}
+                type="password"
+                autoComplete="off"
+                placeholder="Gemini API key"
+                spellCheck={false}
+              />
+            </>
           }
         />
       </SettingsSection>
