@@ -315,7 +315,6 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       : "Send";
   const currentModelSelection = props.selectedThread.modelSelection;
   const currentRuntimeMode = props.selectedThread.runtimeMode;
-  const currentInteractionMode = props.selectedThread.interactionMode ?? "default";
   const connectionStatus = composerConnectionStatus({
     connectionError: props.connectionError,
     connectionState: props.connectionState,
@@ -657,24 +656,8 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
           };
         }),
       },
-      {
-        id: "options-interaction",
-        title: "Interaction",
-        subtitle: currentInteractionMode === "plan" ? "Plan" : "Default",
-        subactions: [
-          { id: "options:interaction:default", title: "Default" },
-          { id: "options:interaction:plan", title: "Plan" },
-        ].map((option) => {
-          const value = option.id.replace("options:interaction:", "");
-          return {
-            id: option.id,
-            title: option.title,
-            state: currentInteractionMode === value ? ("on" as const) : undefined,
-          };
-        }),
-      },
     ],
-    [currentInteractionMode, currentRuntimeMode, providerOptionDescriptors],
+    [currentRuntimeMode, providerOptionDescriptors],
   );
 
   // ── Menu handlers ────────────────────────────────────────
@@ -702,10 +685,6 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       const runtimeMode = event.slice("options:runtime:".length) as RuntimeMode;
       props.onUpdateRuntimeMode(runtimeMode);
       return;
-    }
-    if (event.startsWith("options:interaction:")) {
-      const interactionMode = event.slice("options:interaction:".length) as ProviderInteractionMode;
-      props.onUpdateInteractionMode(interactionMode);
     }
   }
 

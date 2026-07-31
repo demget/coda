@@ -599,24 +599,8 @@ export function NewTaskDraftScreen(props: {
           };
         }),
       },
-      {
-        id: "options-interaction",
-        title: "Interaction",
-        subtitle: flow.interactionMode === "plan" ? "Plan" : "Default",
-        subactions: [
-          { id: "options:interaction:default", title: "Default" },
-          { id: "options:interaction:plan", title: "Plan" },
-        ].map((option) => {
-          const value = option.id.replace("options:interaction:", "");
-          return {
-            id: option.id,
-            title: option.title,
-            state: flow.interactionMode === value ? ("on" as const) : undefined,
-          };
-        }),
-      },
     ],
-    [flow.interactionMode, flow.runtimeMode, providerOptionDescriptors],
+    [flow.runtimeMode, providerOptionDescriptors],
   );
 
   const workspaceMenuActions = useMemo(() => {
@@ -730,11 +714,6 @@ export function NewTaskDraftScreen(props: {
         event.slice("options:runtime:".length) as Parameters<typeof flow.setRuntimeMode>[0],
       );
       return;
-    }
-    if (event.startsWith("options:interaction:")) {
-      flow.setInteractionMode(
-        event.slice("options:interaction:".length) as Parameters<typeof flow.setInteractionMode>[0],
-      );
     }
   }
 
