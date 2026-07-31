@@ -6,6 +6,7 @@ import {
   type KeybindingWhenNode,
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import {
   formatShortcutLabel,
   isChatNewShortcut,
@@ -30,6 +31,7 @@ import {
   threadJumpIndexFromCommand,
   threadTraversalDirectionFromCommand,
   type ShortcutEventLike,
+  type ShortcutMatchContext,
 } from "./keybindings";
 
 function event(overrides: Partial<ShortcutEventLike> = {}): ShortcutEventLike {
@@ -641,6 +643,28 @@ describe("cross-command precedence", () => {
         context: { terminalFocus: true },
       }),
     );
+  });
+});
+
+describe("default mod+W routing", () => {
+  const closeEvent = event({ key: "w", metaKey: true });
+  const resolveClose = (context: Partial<ShortcutMatchContext>) =>
+    resolveShortcutCommand(closeEvent, DEFAULT_RESOLVED_KEYBINDINGS, {
+      platform: "MacIntel",
+      context,
+    });
+
+  it("closes the focused terminal, wherever it lives", () => {
+    assert.strictEqual(resolveClose({ terminalFocus: true }), "terminal.close");
+    assert.strictEqual(resolveClose({ terminalFocus: true, previewFocus: true }), "terminal.close");
+  });
+
+  it("closes the right panel tab when the panel owns focus", () => {
+    assert.strictEqual(resolveClose({ previewFocus: true }), "rightPanel.closeTab");
+  });
+
+  it("stays unbound everywhere else so the window survives", () => {
+    assert.isNull(resolveClose({}));
   });
 });
 

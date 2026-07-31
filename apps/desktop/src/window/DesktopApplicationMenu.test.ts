@@ -92,6 +92,50 @@ const makeElectronMenuLayer = (
     showContextMenu: () => Effect.succeed(Option.none()),
   } satisfies ElectronMenu.ElectronMenu["Service"]);
 
+const configureMenu = (
+  applicationMenuTemplate: Deferred.Deferred<readonly Electron.MenuItemConstructorOptions[]>,
+  selectedAction: Deferred.Deferred<string>,
+  platform: NodeJS.Platform = environmentInput.platform,
+) =>
+  Effect.gen(function* () {
+    const menu = yield* DesktopApplicationMenu.DesktopApplicationMenu;
+    yield* menu.configure;
+  }).pipe(
+    Effect.provide(
+      DesktopApplicationMenu.layer.pipe(
+        Layer.provideMerge(makeElectronMenuLayer(applicationMenuTemplate)),
+        Layer.provideMerge(makeDesktopWindowLayer(selectedAction)),
+        Layer.provideMerge(desktopUpdatesLayer),
+        Layer.provideMerge(electronDialogLayer),
+        Layer.provideMerge(electronAppLayer),
+        Layer.provideMerge(
+          DesktopEnvironment.layer({ ...environmentInput, platform }).pipe(
+            Layer.provide(Layer.mergeAll(NodeServices.layer, DesktopConfig.layerTest({}))),
+          ),
+        ),
+      ),
+    ),
+  );
+
+const submenuOf = (
+  template: readonly Electron.MenuItemConstructorOptions[],
+  label: string,
+): readonly Electron.MenuItemConstructorOptions[] => {
+  const item = template.find((entry) => entry.label === label);
+  if (!item || !Array.isArray(item.submenu)) {
+    throw new Error(`Expected a ${label} menu with an array submenu.`);
+  }
+  return item.submenu;
+};
+
+const flattenItems = (
+  template: readonly Electron.MenuItemConstructorOptions[],
+): readonly Electron.MenuItemConstructorOptions[] =>
+  template.flatMap((item) => [
+    item,
+    ...(Array.isArray(item.submenu) ? flattenItems(item.submenu) : []),
+  ]);
+
 describe("DesktopApplicationMenu", () => {
   it.effect("installs the native menu and routes Settings through DesktopWindow", () =>
     Effect.gen(function* () {
@@ -99,33 +143,10 @@ describe("DesktopApplicationMenu", () => {
       const applicationMenuTemplate =
         yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
 
-      yield* Effect.gen(function* () {
-        const menu = yield* DesktopApplicationMenu.DesktopApplicationMenu;
-        yield* menu.configure;
-      }).pipe(
-        Effect.provide(
-          DesktopApplicationMenu.layer.pipe(
-            Layer.provideMerge(makeElectronMenuLayer(applicationMenuTemplate)),
-            Layer.provideMerge(makeDesktopWindowLayer(selectedAction)),
-            Layer.provideMerge(desktopUpdatesLayer),
-            Layer.provideMerge(electronDialogLayer),
-            Layer.provideMerge(electronAppLayer),
-            Layer.provideMerge(
-              DesktopEnvironment.layer(environmentInput).pipe(
-                Layer.provide(Layer.mergeAll(NodeServices.layer, DesktopConfig.layerTest({}))),
-              ),
-            ),
-          ),
-        ),
-      );
+      yield* configureMenu(applicationMenuTemplate, selectedAction);
 
       const template = yield* Deferred.await(applicationMenuTemplate);
-      const fileMenu = template.find((item) => item.label === "File");
-      assert.isDefined(fileMenu);
-      if (!Array.isArray(fileMenu.submenu)) {
-        throw new Error("Expected File menu submenu to be an array.");
-      }
-      const settingsItem = fileMenu.submenu.find((item) => item.label === "Settings...");
+      const settingsItem = submenuOf(template, "File").find((item) => item.label === "Settings...");
       assert.isDefined(settingsItem);
       const settingsClick = settingsItem.click;
       if (typeof settingsClick !== "function") {
@@ -136,4 +157,31 @@ describe("DesktopApplicationMenu", () => {
       assert.equal(yield* Deferred.await(selectedAction), "open-settings");
     }),
   );
+
+  // Cmd/Ctrl+W has to reach the renderer, which binds it to "close the focused
+  // terminal". Any menu item that keeps the role's default accelerator would
+  // swallow the key and close the window instead.
+  for (const platform of ["darwin", "linux", "win32"] as const) {
+    it.effect(`leaves Cmd/Ctrl+W to the renderer on ${platform}`, () =>
+      Effect.gen(function* () {
+        const selectedAction = yield* Deferred.make<string>();
+        const applicationMenuTemplate =
+          yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
+
+        yield* configureMenu(applicationMenuTemplate, selectedAction, platform);
+
+        const items = flattenItems(yield* Deferred.await(applicationMenuTemplate));
+        const closeItems = items.filter((item) => item.role === "close");
+        assert.isNotEmpty(closeItems);
+        for (const closeItem of closeItems) {
+          assert.equal(closeItem.accelerator, "Shift+CmdOrCtrl+W");
+        }
+        // Electron's stock window menu adds its own Ctrl+W close item off macOS.
+        assert.equal(
+          items.some((item) => item.role === "windowMenu"),
+          platform === "darwin",
+        );
+      }),
+    );
+  }
 });
