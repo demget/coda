@@ -12,6 +12,9 @@ import * as Schema from "effect/Schema";
 import type {
   FilesystemBrowseInput,
   FilesystemBrowseResult,
+  ProjectCheckPathsInput,
+  ProjectCheckPathsResult,
+  ProjectCheckedPath,
   ProjectListEntriesInput,
   ProjectListEntriesResult,
   ProjectSearchContentsInput,
@@ -90,6 +93,7 @@ export class WorkspaceEntries extends Context.Service<
     readonly browse: (
       input: FilesystemBrowseInput,
     ) => Effect.Effect<FilesystemBrowseResult, WorkspaceEntriesBrowseError>;
+    readonly checkPaths: (input: ProjectCheckPathsInput) => Effect.Effect<ProjectCheckPathsResult>;
     readonly list: (
       input: ProjectListEntriesInput,
     ) => Effect.Effect<ProjectListEntriesResult, WorkspaceEntriesError>;
@@ -111,6 +115,20 @@ function expandHomePath(input: string, path: Path.Path): string {
     return path.join(NodeOS.homedir(), input.slice(2));
   }
   return input;
+}
+
+const CHECK_PATHS_CONCURRENCY = 16;
+
+/** `null` when the path cannot be pinned to one location, i.e. relative with no workspace root. */
+function resolveCheckTarget(
+  requestedPath: string,
+  cwd: string | undefined,
+  path: Path.Path,
+): string | null {
+  const expanded = expandHomePath(requestedPath, path);
+  if (path.isAbsolute(expanded)) return path.resolve(expanded);
+  if (!cwd) return null;
+  return path.resolve(expandHomePath(cwd, path), expanded);
 }
 
 const resolveBrowseTarget = Effect.fn("WorkspaceEntries.resolveBrowseTarget")(function* (
@@ -237,6 +255,34 @@ export const make = Effect.gen(function* () {
     },
   );
 
+  /**
+   * Answers "is there anything here?" for path-shaped text a client wants to
+   * turn into a link. Unreadable, malformed, and relative-without-cwd paths all
+   * answer the same way an absent file does — the caller only decides whether
+   * to render a link, so a failure to look is a failure to link.
+   */
+  const checkPaths: WorkspaceEntries["Service"]["checkPaths"] = Effect.fn(
+    "WorkspaceEntries.checkPaths",
+  )(function* (input) {
+    const uniquePaths = [...new Set(input.paths)];
+    const entries = yield* Effect.forEach(
+      uniquePaths,
+      (requestedPath) =>
+        Effect.gen(function* () {
+          const resolvedPath = resolveCheckTarget(requestedPath, input.cwd, path);
+          if (resolvedPath === null) return { path: requestedPath } satisfies ProjectCheckedPath;
+          const stat = yield* Effect.tryPromise(() => NodeFSP.stat(resolvedPath)).pipe(
+            Effect.orElseSucceed(() => null),
+          );
+          if (stat?.isFile()) return { path: requestedPath, kind: "file" } as const;
+          if (stat?.isDirectory()) return { path: requestedPath, kind: "directory" } as const;
+          return { path: requestedPath } satisfies ProjectCheckedPath;
+        }),
+      { concurrency: CHECK_PATHS_CONCURRENCY },
+    );
+    return { entries };
+  });
+
   const search: WorkspaceEntries["Service"]["search"] = Effect.fn("WorkspaceEntries.search")(
     function* (input) {
       const normalizedCwd = yield* normalizeWorkspaceRoot(input.cwd);
@@ -288,7 +334,7 @@ export const make = Effect.gen(function* () {
     },
   );
 
-  return WorkspaceEntries.of({ browse, list, refresh, search, searchContents });
+  return WorkspaceEntries.of({ browse, checkPaths, list, refresh, search, searchContents });
 });
 
 export const layer = Layer.effect(WorkspaceEntries, make).pipe(

@@ -634,6 +634,54 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
     );
   });
 
+  describe("checkPaths", () => {
+    it.effect("reports what exists at absolute and cwd-relative paths", () =>
+      Effect.gen(function* () {
+        const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
+        const path = yield* Path.Path;
+        const cwd = yield* makeTempDir({ prefix: "t3code-workspace-check-paths-" });
+        yield* writeTextFile(cwd, "src/main.ts", "export {};\n");
+
+        const result = yield* workspaceEntries.checkPaths({
+          cwd,
+          paths: [
+            path.join(cwd, "src/main.ts"),
+            path.join(cwd, "src"),
+            path.join(cwd, "src/missing.ts"),
+            "src/main.ts",
+            "deepseek/deepseek-v3.2",
+          ],
+        });
+
+        expect(result.entries).toEqual([
+          { path: path.join(cwd, "src/main.ts"), kind: "file" },
+          { path: path.join(cwd, "src"), kind: "directory" },
+          { path: path.join(cwd, "src/missing.ts") },
+          { path: "src/main.ts", kind: "file" },
+          { path: "deepseek/deepseek-v3.2" },
+        ]);
+      }),
+    );
+
+    it.effect(
+      "answers once per unique path and leaves relative paths unresolved without a cwd",
+      () =>
+        Effect.gen(function* () {
+          const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
+          const path = yield* Path.Path;
+          const cwd = yield* makeTempDir({ prefix: "t3code-workspace-check-paths-nocwd-" });
+          yield* writeTextFile(cwd, "README.md", "# hi\n");
+          const absolute = path.join(cwd, "README.md");
+
+          const result = yield* workspaceEntries.checkPaths({
+            paths: [absolute, absolute, "README.md"],
+          });
+
+          expect(result.entries).toEqual([{ path: absolute, kind: "file" }, { path: "README.md" }]);
+        }),
+    );
+  });
+
   describe("browse", () => {
     it.effect("returns matching directories and excludes files", () =>
       Effect.gen(function* () {

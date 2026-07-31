@@ -10,6 +10,8 @@ const PROJECT_SEARCH_ENTRIES_MAX_LIMIT = 200;
 const PROJECT_SEARCH_CONTENTS_MAX_LIMIT = 500;
 const PROJECT_WRITE_FILE_PATH_MAX_LENGTH = 512;
 const PROJECT_READ_FILE_PATH_MAX_LENGTH = 512;
+const PROJECT_CHECK_PATHS_PATH_MAX_LENGTH = 512;
+export const PROJECT_CHECK_PATHS_MAX_PATHS = 200;
 
 export const ProjectEntryKind = Schema.Literals(["file", "directory"]);
 export type ProjectEntryKind = typeof ProjectEntryKind.Type;
@@ -79,6 +81,32 @@ export const ProjectListEntriesResult = Schema.Struct({
   truncated: Schema.Boolean,
 });
 export type ProjectListEntriesResult = typeof ProjectListEntriesResult.Type;
+
+/**
+ * Existence probe behind file-path highlighting: clients resolve path-shaped
+ * text with heuristics, then ask the environment which of those candidates are
+ * real before rendering them as openable links. Paths are absolute, or
+ * relative to `cwd` when one is supplied.
+ */
+export const ProjectCheckPathsInput = Schema.Struct({
+  cwd: Schema.optional(TrimmedNonEmptyString),
+  paths: Schema.Array(
+    TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_CHECK_PATHS_PATH_MAX_LENGTH)),
+  ).check(Schema.isMaxLength(PROJECT_CHECK_PATHS_MAX_PATHS)),
+});
+export type ProjectCheckPathsInput = typeof ProjectCheckPathsInput.Type;
+
+/** `kind` is absent when nothing exists at the requested path. */
+export const ProjectCheckedPath = Schema.Struct({
+  path: TrimmedNonEmptyString,
+  kind: Schema.optional(ProjectEntryKind),
+});
+export type ProjectCheckedPath = typeof ProjectCheckedPath.Type;
+
+export const ProjectCheckPathsResult = Schema.Struct({
+  entries: Schema.Array(ProjectCheckedPath),
+});
+export type ProjectCheckPathsResult = typeof ProjectCheckPathsResult.Type;
 
 export const ProjectEntriesFailure = Schema.Literals([
   "workspace_root_not_found",

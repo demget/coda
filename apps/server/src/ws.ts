@@ -1615,6 +1615,10 @@ const makeWsRpcLayer = (
             ),
             { "rpc.aggregate": "workspace" },
           ),
+        [WS_METHODS.projectsCheckPaths]: (input) =>
+          observeRpcEffect(WS_METHODS.projectsCheckPaths, workspaceEntries.checkPaths(input), {
+            "rpc.aggregate": "workspace",
+          }),
         [WS_METHODS.projectsListEntries]: (input) =>
           observeRpcEffect(
             WS_METHODS.projectsListEntries,
