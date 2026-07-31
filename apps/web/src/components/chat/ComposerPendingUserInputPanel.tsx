@@ -1,11 +1,11 @@
 import { type ApprovalRequestId } from "@t3tools/contracts";
-import { memo, useEffect, useEffectEvent, useRef, useState } from "react";
+import { memo, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { type PendingUserInput } from "../../session-logic";
 import {
   derivePendingUserInputProgress,
   type PendingUserInputDraftAnswer,
 } from "../../pendingUserInput";
-import { CheckIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 
 interface PendingUserInputPanelProps {
@@ -31,7 +31,7 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
 
   return (
     <ComposerPendingUserInputCard
-      key={activePrompt.requestId}
+      key={`${activePrompt.requestId}:${questionIndex}`}
       prompt={activePrompt}
       isResponding={respondingRequestIds.includes(activePrompt.requestId)}
       answers={answers}
@@ -61,6 +61,8 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   const activeQuestion = progress.activeQuestion;
   const autoAdvanceTimerRef = useRef<number | null>(null);
   const onAdvanceRef = useRef(onAdvance);
+  const questionContentId = useId();
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [optimisticSingleSelect, setOptimisticSingleSelect] = useState<{
     questionId: string;
     optionLabel: string;
@@ -151,76 +153,108 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   }
 
   const customAnswerActive = progress.customAnswer.trim().length > 0;
+  const handleCollapseToggle = () => {
+    setIsCollapsed((collapsed) => !collapsed);
+  };
 
   return (
-    <div className="px-4 py-3 sm:px-5">
-      <div className="mb-2 flex items-center gap-3">
-        <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/55 uppercase">
-          {activeQuestion.header}
-        </span>
-        {prompt.questions.length > 1 ? (
-          <span className="flex h-5 items-center rounded-md bg-muted/60 px-1.5 text-[10px] font-medium tabular-nums text-muted-foreground/60">
-            {questionIndex + 1}/{prompt.questions.length}
+    <div
+      className={cn("px-4 sm:px-5", isCollapsed ? "py-1.5" : "py-3")}
+      data-pending-user-input-collapsed={isCollapsed ? "true" : "false"}
+    >
+      <div className={cn("flex min-w-0 items-center gap-3", !isCollapsed && "mb-2")}>
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/55 uppercase">
+            {activeQuestion.header}
           </span>
-        ) : null}
+          {prompt.questions.length > 1 ? (
+            <span className="flex h-5 items-center rounded-md bg-muted/60 px-1.5 text-[10px] font-medium tabular-nums text-muted-foreground/60">
+              {questionIndex + 1}/{prompt.questions.length}
+            </span>
+          ) : null}
+        </div>
+        {isCollapsed ? (
+          <p className="min-w-0 flex-1 truncate text-xs text-foreground/70">
+            {activeQuestion.question}
+          </p>
+        ) : (
+          <span className="min-w-0 flex-1" />
+        )}
+        <button
+          type="button"
+          aria-controls={questionContentId}
+          aria-expanded={!isCollapsed}
+          aria-label={isCollapsed ? "Expand question" : "Collapse question"}
+          onClick={handleCollapseToggle}
+          className="-my-1.5 -mr-2 flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground/65 outline-none transition-[background-color,color,scale] duration-150 hover:bg-muted/55 hover:text-foreground/85 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70 active:scale-[0.96]"
+        >
+          <ChevronDownIcon
+            className={cn(
+              "size-4 transition-transform duration-200 ease-out",
+              !isCollapsed && "rotate-180",
+            )}
+          />
+        </button>
       </div>
-      <p className="text-sm text-foreground/90">{activeQuestion.question}</p>
-      {activeQuestion.multiSelect ? (
-        <p className="mt-1 text-xs text-muted-foreground/65">Select one or more options.</p>
-      ) : null}
-      <div className="mt-3 space-y-1.5">
-        {activeQuestion.options.map((option, index) => {
-          const isOptimisticallySelected =
-            optimisticSingleSelect?.questionId === activeQuestion.id &&
-            optimisticSingleSelect.optionLabel === option.label;
-          const isSelected =
-            isOptimisticallySelected ||
-            (!customAnswerActive && progress.selectedOptionLabels.includes(option.label));
-          const shortcutKey = index < 9 ? index + 1 : null;
-          const className = cn(
-            "group flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left outline-none transition-all duration-150 focus-visible:border-primary/40 focus-visible:ring-1 focus-visible:ring-primary/25",
-            isSelected
-              ? "border-primary/30 bg-primary/8 text-foreground"
-              : "border-transparent bg-muted/22 text-foreground/85 hover:border-border/45 hover:bg-muted/34",
-            isResponding && "opacity-50 cursor-not-allowed",
-            !isResponding && "cursor-pointer",
-          );
-          const content = (
-            <>
-              <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                <span className="text-sm font-medium">{option.label}</span>
-                {option.description && option.description !== option.label ? (
-                  <span className="text-xs text-muted-foreground">{option.description}</span>
+      <div id={questionContentId} hidden={isCollapsed}>
+        <p className="text-sm text-foreground/90">{activeQuestion.question}</p>
+        {activeQuestion.multiSelect ? (
+          <p className="mt-1 text-xs text-muted-foreground/65">Select one or more options.</p>
+        ) : null}
+        <div className="mt-3 space-y-1.5">
+          {activeQuestion.options.map((option, index) => {
+            const isOptimisticallySelected =
+              optimisticSingleSelect?.questionId === activeQuestion.id &&
+              optimisticSingleSelect.optionLabel === option.label;
+            const isSelected =
+              isOptimisticallySelected ||
+              (!customAnswerActive && progress.selectedOptionLabels.includes(option.label));
+            const shortcutKey = index < 9 ? index + 1 : null;
+            const className = cn(
+              "group flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left outline-none transition-[background-color,border-color,box-shadow,color,opacity] duration-150 focus-visible:border-primary/40 focus-visible:ring-1 focus-visible:ring-primary/25",
+              isSelected
+                ? "border-primary/30 bg-primary/8 text-foreground"
+                : "border-transparent bg-muted/22 text-foreground/85 hover:border-border/45 hover:bg-muted/34",
+              isResponding && "opacity-50 cursor-not-allowed",
+              !isResponding && "cursor-pointer",
+            );
+            const content = (
+              <>
+                <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+                  <span className="text-sm font-medium">{option.label}</span>
+                  {option.description && option.description !== option.label ? (
+                    <span className="text-xs text-muted-foreground">{option.description}</span>
+                  ) : null}
+                </div>
+                {isSelected ? (
+                  <CheckIcon className="size-3.5 shrink-0 text-primary" />
+                ) : shortcutKey !== null ? (
+                  <kbd
+                    className={cn(
+                      "flex size-5 shrink-0 items-center justify-center rounded border border-border/50 text-[11px] font-medium tabular-nums transition-colors duration-150",
+                      "bg-background/35 text-muted-foreground/70 group-hover:border-border/70 group-hover:text-muted-foreground",
+                    )}
+                  >
+                    {shortcutKey}
+                  </kbd>
                 ) : null}
-              </div>
-              {isSelected ? (
-                <CheckIcon className="size-3.5 shrink-0 text-primary" />
-              ) : shortcutKey !== null ? (
-                <kbd
-                  className={cn(
-                    "flex size-5 shrink-0 items-center justify-center rounded border border-border/50 text-[11px] font-medium tabular-nums transition-colors duration-150",
-                    "bg-background/35 text-muted-foreground/70 group-hover:border-border/70 group-hover:text-muted-foreground",
-                  )}
-                >
-                  {shortcutKey}
-                </kbd>
-              ) : null}
-            </>
-          );
-          return (
-            <button
-              key={`${activeQuestion.id}:${option.label}`}
-              type="button"
-              disabled={isResponding}
-              onClick={() => {
-                handleOptionSelection(activeQuestion.id, option.label);
-              }}
-              className={className}
-            >
-              {content}
-            </button>
-          );
-        })}
+              </>
+            );
+            return (
+              <button
+                key={`${activeQuestion.id}:${option.label}`}
+                type="button"
+                disabled={isResponding}
+                onClick={() => {
+                  handleOptionSelection(activeQuestion.id, option.label);
+                }}
+                className={className}
+              >
+                {content}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
