@@ -144,7 +144,7 @@ describe("buildHomeThreadGroups", () => {
       environmentId: remoteEnvironmentId,
       id: ProjectId.make("project-canonical-remote"),
       title: "t3code",
-      workspaceRoot: "/remote/t3code/",
+      workspaceRoot: "/remote/coda/",
       repositoryIdentity,
       updatedAt: "2026-06-02T00:00:00.000Z",
     });
@@ -209,7 +209,7 @@ describe("buildHomeThreadGroups", () => {
         environmentId: remoteEnvironmentId,
         id: ProjectId.make("project-remote-fresh"),
         title: "t3code",
-        workspaceRoot: "/remote/t3code/",
+        workspaceRoot: "/remote/coda/",
         updatedAt: "2026-06-02T00:00:00.000Z",
       }),
     ];
@@ -417,7 +417,7 @@ describe("buildHomeThreadGroups", () => {
     const project = makeProject({
       environmentId,
       id: ProjectId.make("project-1"),
-      title: "T3 Code",
+      title: "Coda",
     });
     const threads = [
       makeThread({
@@ -536,7 +536,7 @@ describe("buildHomeThreadGroups", () => {
       provider: "github",
       owner: "t3tools",
       name: "t3code",
-      displayName: "T3 Code",
+      displayName: "Coda",
       rootPath: "/workspaces/t3code",
     };
     const projects = [
@@ -544,14 +544,14 @@ describe("buildHomeThreadGroups", () => {
         environmentId,
         id: ProjectId.make("project-web"),
         title: "Web",
-        workspaceRoot: "/workspaces/t3code/apps/web",
+        workspaceRoot: "/workspaces/coda/apps/web",
         repositoryIdentity,
       }),
       makeProject({
         environmentId,
         id: ProjectId.make("project-mobile"),
         title: "Mobile",
-        workspaceRoot: "/workspaces/t3code/apps/mobile",
+        workspaceRoot: "/workspaces/coda/apps/mobile",
         repositoryIdentity,
       }),
     ];
@@ -576,7 +576,7 @@ describe("buildHomeThreadGroups", () => {
     const project = makeProject({
       environmentId,
       id: ProjectId.make("project-1"),
-      title: "T3 Code",
+      title: "Coda",
     });
     const threads = [
       makeThread({
@@ -614,7 +614,7 @@ describe("buildHomeThreadGroups", () => {
     const project = makeProject({
       environmentId,
       id: ProjectId.make("project-1"),
-      title: "T3 Code",
+      title: "Coda",
     });
     const threads = ["2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05"].map(
       (day, index) =>
@@ -641,7 +641,7 @@ describe("buildHomeThreadGroups", () => {
     const project = makeProject({
       environmentId,
       id: ProjectId.make("project-1"),
-      title: "T3 Code",
+      title: "Coda",
     });
     const threads = ["2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05"].map(
       (day, index) =>
@@ -654,7 +654,7 @@ describe("buildHomeThreadGroups", () => {
         }),
     );
 
-    const group = buildGroups([project], threads, { searchQuery: "T3 Code" })[0];
+    const group = buildGroups([project], threads, { searchQuery: "Coda" })[0];
     // Search reaches the full history rather than the 3-thread fallback.
     expect(group?.recentThreads).toHaveLength(5);
     expect(group?.recentThreads.map((thread) => thread.id)).toEqual(
@@ -667,7 +667,7 @@ describe("buildHomeThreadGroups", () => {
     const project = makeProject({
       environmentId,
       id: ProjectId.make("project-1"),
-      title: "T3 Code",
+      title: "Coda",
     });
     const thread = makeThread({
       environmentId,

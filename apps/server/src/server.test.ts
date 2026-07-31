@@ -1575,7 +1575,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         },
         scope: "orchestration:read orchestration:operate terminal:operate review:write",
         clientMetadata: {
-          label: "T3 Code Mobile",
+          label: "Coda Mobile",
           deviceType: "mobile",
           os: "iOS",
         },
@@ -1602,7 +1602,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(response.status, 200);
       assert.equal(clientsResponse.status, 200);
       assert.deepInclude(mobileClient?.client, {
-        label: "T3 Code Mobile",
+        label: "Coda Mobile",
         deviceType: "mobile",
         os: "iOS",
         ipAddress: "127.0.0.1",
@@ -3466,7 +3466,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  for (const desktopOrigin of ["t3code://app", "t3code-dev://app"]) {
+  for (const desktopOrigin of ["coda://app", "coda-dev://app"]) {
     it.effect(`allows credentialed preflights from ${desktopOrigin} in development`, () =>
       Effect.gen(function* () {
         yield* buildAppUnderTest({
@@ -7100,7 +7100,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             isRepo: true,
             hasPrimaryRemote: true,
             isDefaultRef: false,
-            refName: "t3code/bootstrap-refName",
+            refName: "coda/bootstrap-refName",
             hasWorkingTreeChanges: false,
             workingTree: {
               files: [],
@@ -7136,7 +7136,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               bootstrapGitOperations.push("create-worktree");
               return {
                 worktree: {
-                  refName: "t3code/bootstrap-refName",
+                  refName: "coda/bootstrap-refName",
                   path: "/tmp/bootstrap-worktree",
                 },
               };
@@ -7212,7 +7212,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                 prepareWorktree: {
                   projectCwd: "/tmp/project",
                   baseBranch: "main",
-                  branch: "t3code/bootstrap-refName",
+                  branch: "coda/bootstrap-refName",
                   startFromOrigin: true,
                 },
                 runSetupScript: true,
@@ -7236,7 +7236,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         assert.deepEqual(createWorktree.mock.calls[0]?.[0], {
           cwd: "/tmp/project",
           refName: fetchedOriginCommit,
-          newRefName: "t3code/bootstrap-refName",
+          newRefName: "coda/bootstrap-refName",
           baseRefName: "main",
           path: null,
         });
@@ -7285,7 +7285,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
           Effect.succeed({
             worktree: {
-              refName: "t3code/bootstrap-refName",
+              refName: "coda/bootstrap-refName",
               path: "/tmp/bootstrap-worktree",
             },
           }),
@@ -7356,7 +7356,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               prepareWorktree: {
                 projectCwd: "/tmp/project",
                 baseBranch: "main",
-                branch: "t3code/bootstrap-refName",
+                branch: "coda/bootstrap-refName",
               },
               runSetupScript: true,
             },
@@ -7390,7 +7390,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
           Effect.succeed({
             worktree: {
-              refName: "t3code/bootstrap-refName",
+              refName: "coda/bootstrap-refName",
               path: "/tmp/bootstrap-worktree",
             },
           }),
@@ -7477,7 +7477,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               prepareWorktree: {
                 projectCwd: "/tmp/project",
                 baseBranch: "main",
-                branch: "t3code/bootstrap-refName",
+                branch: "coda/bootstrap-refName",
               },
               runSetupScript: true,
             },
@@ -7561,7 +7561,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               prepareWorktree: {
                 projectCwd: "/tmp/project",
                 baseBranch: "main",
-                branch: "t3code/bootstrap-refName",
+                branch: "coda/bootstrap-refName",
               },
               runSetupScript: false,
             },

@@ -90,18 +90,18 @@ describe("hasDeployChanges", () => {
 describe("reconcileRootEnvRelayUrl", () => {
   it("adds the relay URL to an empty root env file", () => {
     expect(reconcileRootEnvRelayUrl("", "https://relay.example.test")).toBe(
-      "T3CODE_RELAY_URL=https://relay.example.test\n",
+      "CODA_RELAY_URL=https://relay.example.test\n",
     );
   });
 
   it("preserves unrelated root env entries while replacing a previous relay URL", () => {
     expect(
       reconcileRootEnvRelayUrl(
-        "T3CODE_CLERK_PUBLISHABLE_KEY=pk_test_example\nT3CODE_RELAY_URL=https://old.example.test\n",
+        "CODA_CLERK_PUBLISHABLE_KEY=pk_test_example\nCODA_RELAY_URL=https://old.example.test\n",
         "https://relay.example.test",
       ),
     ).toBe(
-      "T3CODE_CLERK_PUBLISHABLE_KEY=pk_test_example\nT3CODE_RELAY_URL=https://relay.example.test\n",
+      "CODA_CLERK_PUBLISHABLE_KEY=pk_test_example\nCODA_RELAY_URL=https://relay.example.test\n",
     );
   });
 });
@@ -120,13 +120,13 @@ describe("reconcileRootEnvPublicConfig", () => {
   it("adds the complete local client config", () => {
     expect(reconcileRootEnvPublicConfig("", config)).toBe(
       [
-        "T3CODE_RELAY_URL=https://relay.example.test",
-        "T3CODE_MOBILE_OTLP_TRACES_URL=https://api.axiom.co/v1/traces",
-        "T3CODE_MOBILE_OTLP_TRACES_DATASET=t3-code-mobile-traces-dev",
-        "T3CODE_MOBILE_OTLP_TRACES_TOKEN=xaat-public-ingest",
-        "T3CODE_RELAY_CLIENT_OTLP_TRACES_URL=https://api.axiom.co/v1/traces",
-        "T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET=t3-code-relay-client-traces-dev",
-        "T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN=xaat-relay-client-ingest",
+        "CODA_RELAY_URL=https://relay.example.test",
+        "CODA_MOBILE_OTLP_TRACES_URL=https://api.axiom.co/v1/traces",
+        "CODA_MOBILE_OTLP_TRACES_DATASET=t3-code-mobile-traces-dev",
+        "CODA_MOBILE_OTLP_TRACES_TOKEN=xaat-public-ingest",
+        "CODA_RELAY_CLIENT_OTLP_TRACES_URL=https://api.axiom.co/v1/traces",
+        "CODA_RELAY_CLIENT_OTLP_TRACES_DATASET=t3-code-relay-client-traces-dev",
+        "CODA_RELAY_CLIENT_OTLP_TRACES_TOKEN=xaat-relay-client-ingest",
         "",
       ].join("\n"),
     );
@@ -136,28 +136,28 @@ describe("reconcileRootEnvPublicConfig", () => {
     expect(
       reconcileRootEnvPublicConfig(
         [
-          "T3CODE_CLERK_PUBLISHABLE_KEY=pk_test_example",
-          "T3CODE_RELAY_URL=https://old.example.test",
-          "T3CODE_MOBILE_OTLP_TRACES_URL=https://old.example.test/v1/traces",
-          "T3CODE_MOBILE_OTLP_TRACES_DATASET=old-dataset",
-          "T3CODE_MOBILE_OTLP_TRACES_TOKEN=old-token",
-          "T3CODE_RELAY_CLIENT_OTLP_TRACES_URL=https://old.example.test/v1/traces",
-          "T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET=old-client-dataset",
-          "T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN=old-client-token",
+          "CODA_CLERK_PUBLISHABLE_KEY=pk_test_example",
+          "CODA_RELAY_URL=https://old.example.test",
+          "CODA_MOBILE_OTLP_TRACES_URL=https://old.example.test/v1/traces",
+          "CODA_MOBILE_OTLP_TRACES_DATASET=old-dataset",
+          "CODA_MOBILE_OTLP_TRACES_TOKEN=old-token",
+          "CODA_RELAY_CLIENT_OTLP_TRACES_URL=https://old.example.test/v1/traces",
+          "CODA_RELAY_CLIENT_OTLP_TRACES_DATASET=old-client-dataset",
+          "CODA_RELAY_CLIENT_OTLP_TRACES_TOKEN=old-client-token",
           "",
         ].join("\n"),
         config,
       ),
     ).toBe(
       [
-        "T3CODE_CLERK_PUBLISHABLE_KEY=pk_test_example",
-        "T3CODE_RELAY_URL=https://relay.example.test",
-        "T3CODE_MOBILE_OTLP_TRACES_URL=https://api.axiom.co/v1/traces",
-        "T3CODE_MOBILE_OTLP_TRACES_DATASET=t3-code-mobile-traces-dev",
-        "T3CODE_MOBILE_OTLP_TRACES_TOKEN=xaat-public-ingest",
-        "T3CODE_RELAY_CLIENT_OTLP_TRACES_URL=https://api.axiom.co/v1/traces",
-        "T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET=t3-code-relay-client-traces-dev",
-        "T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN=xaat-relay-client-ingest",
+        "CODA_CLERK_PUBLISHABLE_KEY=pk_test_example",
+        "CODA_RELAY_URL=https://relay.example.test",
+        "CODA_MOBILE_OTLP_TRACES_URL=https://api.axiom.co/v1/traces",
+        "CODA_MOBILE_OTLP_TRACES_DATASET=t3-code-mobile-traces-dev",
+        "CODA_MOBILE_OTLP_TRACES_TOKEN=xaat-public-ingest",
+        "CODA_RELAY_CLIENT_OTLP_TRACES_URL=https://api.axiom.co/v1/traces",
+        "CODA_RELAY_CLIENT_OTLP_TRACES_DATASET=t3-code-relay-client-traces-dev",
+        "CODA_RELAY_CLIENT_OTLP_TRACES_TOKEN=xaat-relay-client-ingest",
         "",
       ].join("\n"),
     );
@@ -190,9 +190,9 @@ describe("serializeRelayClientTracingEnvironment", () => {
       }),
     ).toBe(
       [
-        "T3CODE_RELAY_CLIENT_OTLP_TRACES_URL=https://api.axiom.co/v1/traces",
-        "T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET=relay",
-        "T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN=client-token",
+        "CODA_RELAY_CLIENT_OTLP_TRACES_URL=https://api.axiom.co/v1/traces",
+        "CODA_RELAY_CLIENT_OTLP_TRACES_DATASET=relay",
+        "CODA_RELAY_CLIENT_OTLP_TRACES_TOKEN=client-token",
         "",
       ].join("\n"),
     );
