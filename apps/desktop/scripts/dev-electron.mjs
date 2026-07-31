@@ -34,6 +34,10 @@ const forcedShutdownTimeoutMs = 1_500;
 const restartDebounceMs = 120;
 const childTreeGracePeriodMs = 1_200;
 const remoteDebuggingPort = process.env.CODA_DESKTOP_REMOTE_DEBUGGING_PORT?.trim();
+// See CODA_DESKTOP_AUTO_RELAUNCH in vite.config.ts. Manual mode does not rebuild
+// the bundle while the app runs, but the server's dist is watched here too and
+// another task could still rewrite it — so the watchers come off as well.
+const autoRelaunch = process.env.CODA_DESKTOP_AUTO_RELAUNCH !== "0";
 // oxlint-disable-next-line t3code/no-global-process-runtime -- Standalone dev script has no Effect runtime.
 const hostPlatform = NodeOS.platform();
 
@@ -232,7 +236,13 @@ async function shutdown(exitCode) {
   process.exit(exitCode);
 }
 
-startWatchers();
+if (autoRelaunch) {
+  startWatchers();
+} else {
+  console.log(
+    "[dev-electron] auto-relaunch off: this app stays on its current build. Re-run the dev command to pick up source changes.",
+  );
+}
 cleanupStaleDevApps();
 startApp();
 
