@@ -4,7 +4,7 @@
   "scripts": [
     {
       "name": "Setup Worktree",
-      "command": "vp i && ln -sf $T3CODE_PROJECT_ROOT/.env .env && ln -sf $T3CODE_PROJECT_ROOT/infra/relay/.env infra/relay/.env",
+      "command": "ROOT=${CODA_PROJECT_ROOT:-$T3CODE_PROJECT_ROOT}; vp i && ln -sf $ROOT/.env .env && ln -sf $ROOT/infra/relay/.env infra/relay/.env",
       "icon": "configure",
       "runOnWorktreeCreate": true
     }

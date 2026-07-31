@@ -76,12 +76,12 @@ function normalizeEntryPath(entryPath: string): string {
  * npm identity, and the desktop manages its own updates.
  */
 export function isPublishedCliEntry(entryPath: string): boolean {
-  return normalizeEntryPath(entryPath).includes("/node_modules/t3/dist/");
+  return normalizeEntryPath(entryPath).includes("/node_modules/coda/dist/");
 }
 
 /**
  * The update path this process can offer, or null when only a manual
- * relaunch works. "desktop-managed" — the T3 Code desktop app spawned this
+ * relaunch works. "desktop-managed" — the Coda desktop app spawned this
  * backend and owns its version; only updating the app updates it.
  * "boot-service" — this is the systemd-supervised process from
  * bootService.ts: rewrite the unit and let systemd swap it. "respawn" — a
@@ -118,7 +118,7 @@ export const resolveServerSelfUpdateCapability = Effect.fn(
       Effect.orElseSucceed(() => false),
     );
     // INVOCATION_ID only proves that some systemd unit launched us. The
-    // explicit marker written into t3code.service identifies this unit as the
+    // explicit marker written into coda.service identifies this unit as the
     // supervisor that will replace the current process when restarted.
     if (
       unitReferencesEntry &&
@@ -232,7 +232,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (option
   )(function* (input, reportProgress = () => Effect.void) {
     if (capability === "desktop-managed") {
       return yield* failWith(
-        "This server is managed by the T3 Code desktop app on its machine; update the desktop app to update it.",
+        "This server is managed by the Coda desktop app on its machine; update the desktop app to update it.",
       );
     }
     if (capability === null) {

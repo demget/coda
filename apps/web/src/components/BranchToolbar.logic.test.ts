@@ -30,19 +30,19 @@ describe("resolvePreviousWorktreeSeed", () => {
         threads: [
           {
             branch: "t3/older",
-            worktreePath: "/repo/.t3/worktrees/older",
+            worktreePath: "/repo/.coda/worktrees/older",
             updatedAt: "2026-07-20T00:00:00.000Z",
           },
           {
             branch: "t3/newer",
-            worktreePath: "/repo/.t3/worktrees/newer",
+            worktreePath: "/repo/.coda/worktrees/newer",
             updatedAt: "2026-07-22T00:00:00.000Z",
           },
           { branch: "main", worktreePath: null, updatedAt: "2026-07-23T00:00:00.000Z" },
         ],
         currentWorktreePath: null,
       }),
-    ).toEqual({ branch: "t3/newer", worktreePath: "/repo/.t3/worktrees/newer" });
+    ).toEqual({ branch: "t3/newer", worktreePath: "/repo/.coda/worktrees/newer" });
   });
 
   it("skips the worktree the composer already points at", () => {
@@ -51,11 +51,11 @@ describe("resolvePreviousWorktreeSeed", () => {
         threads: [
           {
             branch: "t3/current",
-            worktreePath: "/repo/.t3/worktrees/current",
+            worktreePath: "/repo/.coda/worktrees/current",
             updatedAt: "2026-07-22T00:00:00.000Z",
           },
         ],
-        currentWorktreePath: "/repo/.t3/worktrees/current",
+        currentWorktreePath: "/repo/.coda/worktrees/current",
       }),
     ).toBeNull();
   });
@@ -75,25 +75,25 @@ describe("resolvePreviousWorktreeSeed", () => {
         threads: [
           {
             branch: "t3/archived",
-            worktreePath: "/repo/.t3/worktrees/archived",
+            worktreePath: "/repo/.coda/worktrees/archived",
             updatedAt: "2026-07-23T00:00:00.000Z",
             archivedAt: "2026-07-23T01:00:00.000Z",
           },
           {
             branch: "t3/garbage-timestamp",
-            worktreePath: "/repo/.t3/worktrees/garbage",
+            worktreePath: "/repo/.coda/worktrees/garbage",
             updatedAt: "not-a-date",
           },
           {
             branch: "t3/live",
-            worktreePath: "/repo/.t3/worktrees/live",
+            worktreePath: "/repo/.coda/worktrees/live",
             updatedAt: "2026-07-21T00:00:00.000Z",
             archivedAt: null,
           },
         ],
         currentWorktreePath: null,
       }),
-    ).toEqual({ branch: "t3/live", worktreePath: "/repo/.t3/worktrees/live" });
+    ).toEqual({ branch: "t3/live", worktreePath: "/repo/.coda/worktrees/live" });
   });
 });
 
@@ -113,7 +113,7 @@ describe("resolveDraftEnvModeAfterBranchChange", () => {
     expect(
       resolveDraftEnvModeAfterBranchChange({
         nextWorktreePath: null,
-        currentWorktreePath: "/repo/.t3/worktrees/feature-a",
+        currentWorktreePath: "/repo/.coda/worktrees/feature-a",
         effectiveEnvMode: "worktree",
       }),
     ).toBe("local");
@@ -132,7 +132,7 @@ describe("resolveDraftEnvModeAfterBranchChange", () => {
   it("uses worktree mode when selecting a ref already attached to a worktree", () => {
     expect(
       resolveDraftEnvModeAfterBranchChange({
-        nextWorktreePath: "/repo/.t3/worktrees/feature-a",
+        nextWorktreePath: "/repo/.coda/worktrees/feature-a",
         currentWorktreePath: null,
         effectiveEnvMode: "local",
       }),
@@ -329,7 +329,7 @@ describe("resolveLocalCheckoutBranchMismatch", () => {
     expect(
       resolveLocalCheckoutBranchMismatch({
         effectiveEnvMode: "worktree",
-        activeWorktreePath: "/repo/.t3/worktrees/feature-thread",
+        activeWorktreePath: "/repo/.coda/worktrees/feature-thread",
         activeThreadBranch: "feature/thread",
         currentGitBranch: "feature/current",
       }),
@@ -425,7 +425,7 @@ describe("resolveEffectiveEnvMode", () => {
   it("treats draft threads already attached to a worktree as current-checkout mode", () => {
     expect(
       resolveEffectiveEnvMode({
-        activeWorktreePath: "/repo/.t3/worktrees/feature-a",
+        activeWorktreePath: "/repo/.coda/worktrees/feature-a",
         hasServerThread: false,
         draftThreadEnvMode: "worktree",
       }),
@@ -456,7 +456,7 @@ describe("resolveCurrentWorkspaceLabel", () => {
   });
 
   it("describes the active checkout as a worktree when one is attached", () => {
-    expect(resolveCurrentWorkspaceLabel("/repo/.t3/worktrees/feature-a")).toBe("Current worktree");
+    expect(resolveCurrentWorkspaceLabel("/repo/.coda/worktrees/feature-a")).toBe("Current worktree");
   });
 });
 
@@ -466,7 +466,7 @@ describe("resolveLockedWorkspaceLabel", () => {
   });
 
   it("uses a shorter label for an attached worktree", () => {
-    expect(resolveLockedWorkspaceLabel("/repo/.t3/worktrees/feature-a")).toBe("Worktree");
+    expect(resolveLockedWorkspaceLabel("/repo/.coda/worktrees/feature-a")).toBe("Worktree");
   });
 });
 
@@ -598,15 +598,15 @@ describe("resolveBranchSelectionTarget", () => {
     expect(
       resolveBranchSelectionTarget({
         activeProjectCwd: "/repo",
-        activeWorktreePath: "/repo/.t3/worktrees/feature-a",
+        activeWorktreePath: "/repo/.coda/worktrees/feature-a",
         refName: {
           isDefault: false,
-          worktreePath: "/repo/.t3/worktrees/feature-b",
+          worktreePath: "/repo/.coda/worktrees/feature-b",
         },
       }),
     ).toEqual({
-      checkoutCwd: "/repo/.t3/worktrees/feature-b",
-      nextWorktreePath: "/repo/.t3/worktrees/feature-b",
+      checkoutCwd: "/repo/.coda/worktrees/feature-b",
+      nextWorktreePath: "/repo/.coda/worktrees/feature-b",
       reuseExistingWorktree: true,
     });
   });
@@ -615,7 +615,7 @@ describe("resolveBranchSelectionTarget", () => {
     expect(
       resolveBranchSelectionTarget({
         activeProjectCwd: "/repo",
-        activeWorktreePath: "/repo/.t3/worktrees/feature-a",
+        activeWorktreePath: "/repo/.coda/worktrees/feature-a",
         refName: {
           isDefault: true,
           worktreePath: "/repo",
@@ -632,7 +632,7 @@ describe("resolveBranchSelectionTarget", () => {
     expect(
       resolveBranchSelectionTarget({
         activeProjectCwd: "/repo",
-        activeWorktreePath: "/repo/.t3/worktrees/feature-a",
+        activeWorktreePath: "/repo/.coda/worktrees/feature-a",
         refName: {
           isDefault: true,
           worktreePath: null,
@@ -649,15 +649,15 @@ describe("resolveBranchSelectionTarget", () => {
     expect(
       resolveBranchSelectionTarget({
         activeProjectCwd: "/repo",
-        activeWorktreePath: "/repo/.t3/worktrees/feature-a",
+        activeWorktreePath: "/repo/.coda/worktrees/feature-a",
         refName: {
           isDefault: false,
           worktreePath: null,
         },
       }),
     ).toEqual({
-      checkoutCwd: "/repo/.t3/worktrees/feature-a",
-      nextWorktreePath: "/repo/.t3/worktrees/feature-a",
+      checkoutCwd: "/repo/.coda/worktrees/feature-a",
+      nextWorktreePath: "/repo/.coda/worktrees/feature-a",
       reuseExistingWorktree: false,
     });
   });

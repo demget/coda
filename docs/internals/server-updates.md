@@ -1,8 +1,8 @@
 # Server Update Architecture
 
-> For maintainers. Using T3 Code? See [docs/user](../user/).
+> For maintainers. Using Coda? See [docs/user](../user/).
 
-T3 Code can update a connected server to the exact version of the client that detected version
+Coda can update a connected server to the exact version of the client that detected version
 drift. This path exists primarily for remote environments, where the user may not have a terminal
 open on the server machine.
 
@@ -98,7 +98,7 @@ directory is left in place.
 
 The systemd user service is a host lifecycle concern, not a T3 Connect resource. The standalone
 `t3 service install`, `uninstall`, `update`, and `status` commands own it. Install and update both
-reconcile the unit through `BootService`; running `npx t3@latest service update` therefore pins and
+reconcile the unit through `BootService`; running `npx coda@latest service update` therefore pins and
 activates the latest CLI release without requiring a connected client.
 
 The `t3 connect` onboarding flow may offer service installation, but it calls the same reconciliation
