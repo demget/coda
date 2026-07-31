@@ -127,6 +127,15 @@ export const make = Effect.gen(function* () {
     const settingsClick = () => {
       runMenuEffect("open-settings", dispatchMenuAction("open-settings"));
     };
+    // Cmd/Ctrl+W belongs to the renderer, which binds it to "close the focused
+    // terminal". A native accelerator is handled by the menu before the web
+    // contents ever sees the key, so window close moves one chord over rather
+    // than swallowing every Cmd+W and taking the whole window down with it.
+    const closeWindowItem = {
+      role: "close",
+      label: "Close Window",
+      accelerator: "Shift+CmdOrCtrl+W",
+    } satisfies Electron.MenuItemConstructorOptions;
     const template: Electron.MenuItemConstructorOptions[] = [];
 
     if (environment.platform === "darwin") {
@@ -170,7 +179,7 @@ export const make = Effect.gen(function* () {
                 },
                 { type: "separator" as const },
               ]),
-          { role: environment.platform === "darwin" ? "close" : "quit" },
+          environment.platform === "darwin" ? closeWindowItem : { role: "quit" },
         ],
       },
       { role: "editMenu" },
@@ -189,7 +198,18 @@ export const make = Effect.gen(function* () {
           { role: "togglefullscreen" },
         ],
       },
-      { role: "windowMenu" },
+      environment.platform === "darwin"
+        ? // The stock macOS Window menu has no close item; File owns that one.
+          { role: "windowMenu" }
+        : {
+            label: "Window",
+            submenu: [
+              { role: "minimize" },
+              { role: "zoom" },
+              { type: "separator" },
+              closeWindowItem,
+            ],
+          },
       {
         role: "help",
         submenu: [
