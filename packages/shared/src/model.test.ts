@@ -154,4 +154,14 @@ describe("model slug normalization", () => {
     expect(normalizeModelSlug("opus", claude)).toBe("claude-opus-5");
     expect(normalizeCustomModelSlug(" opus ")).toBe("opus");
   });
+
+  it("expands Kimi's user-facing model aliases", () => {
+    const kimi = ProviderDriverKind.make("kimi");
+
+    expect(normalizeModelSlug("k3", kimi)).toBe("kimi-code/k3");
+    expect(normalizeModelSlug("k2.7", kimi)).toBe("kimi-code/kimi-for-coding");
+    expect(normalizeModelSlug("kimi-for-coding-highspeed", kimi)).toBe(
+      "kimi-code/kimi-for-coding-highspeed",
+    );
+  });
 });

@@ -55,6 +55,11 @@ export interface AcpSpawnInput {
   readonly args: ReadonlyArray<string>;
   readonly cwd?: string;
   readonly env?: NodeJS.ProcessEnv;
+  /**
+   * Grace period after the initial SIGTERM before the process group is
+   * terminated with SIGKILL. Leave unset for providers that exit promptly.
+   */
+  readonly forceKillAfter?: Duration.Input;
 }
 
 export interface AcpSessionRuntimeOptions {
@@ -339,6 +344,7 @@ export const make = (
         ChildProcess.make(spawnCommand.command, spawnCommand.args, {
           ...(options.spawn.cwd ? { cwd: options.spawn.cwd } : {}),
           ...(options.spawn.env ? { env: options.spawn.env, extendEnv: true } : {}),
+          ...(options.spawn.forceKillAfter ? { forceKillAfter: options.spawn.forceKillAfter } : {}),
           shell: spawnCommand.shell,
         }),
       )

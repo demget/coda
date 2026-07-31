@@ -211,6 +211,15 @@ export const GrokIcon: Icon = ({ className, ...props }) => (
   </svg>
 );
 
+// Official Kimi Code mark from MoonshotAI/kimi-code's VS Code extension.
+export const KimiIcon: Icon = (props) => (
+  <svg {...props} viewBox="0 0 24 24" fill="none">
+    <rect x="3" y="4.5" width="18" height="13" rx="2.2" stroke="currentColor" strokeWidth="1.6" />
+    <rect x="9.6" y="8" width="1.4" height="2.6" rx="0.45" fill="currentColor" />
+    <rect x="15.6" y="8" width="1.4" height="2.6" rx="0.45" fill="currentColor" />
+  </svg>
+);
+
 export const TraeIcon: Icon = (props) => (
   <svg {...props} viewBox="0 0 24 24" fill="currentColor">
     {/* Back rectangle: left strip + bottom strip drawn separately — empty bottom-left corner is the gap between them */}

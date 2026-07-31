@@ -174,4 +174,31 @@ describe("mobile model options", () => {
     // No config (environment offline) — nothing to validate against.
     expect(resolveSelectableModelSelection(null, disabled)).toBe(disabled);
   });
+
+  it("uses the Kimi display name for the default Kimi instance", () => {
+    const config = {
+      providers: [
+        {
+          instanceId: "kimi",
+          driver: "kimi",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated" },
+          models: [
+            {
+              slug: "kimi-code/k3",
+              name: "K3",
+              isCustom: false,
+              capabilities: { optionDescriptors: [] },
+            },
+          ],
+        },
+      ],
+    } as unknown as ServerConfig;
+
+    const [option] = buildModelOptions(config, null);
+
+    expect(option?.providerLabel).toBe("Kimi");
+    expect(option?.subtitle).toBe("Kimi");
+  });
 });
