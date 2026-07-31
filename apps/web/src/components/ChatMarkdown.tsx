@@ -58,6 +58,7 @@ import { fnv1a32 } from "../lib/diffRendering";
 import { LRUCache } from "../lib/lruCache";
 import { getSyntaxHighlighterPromise } from "../lib/syntaxHighlighting";
 import { RenderErrorBoundary } from "./RenderErrorBoundary";
+import { useFilePathExistence } from "../hooks/useFilePathExistence";
 import { useTheme } from "../hooks/useTheme";
 import { getClientSettings } from "../hooks/useSettings";
 import {
@@ -1302,13 +1303,25 @@ function ChatMarkdown({
     }
     return metaByText;
   }, [cwd, text]);
-  const fileLinkParentSuffixByPath = useMemo(() => {
+  const candidateFilePaths = useMemo(() => {
     const filePaths = [
       ...[...markdownFileLinkMetaByHref.values()].map((meta) => meta.filePath),
       ...[...inlineCodeFileLinkMetaByText.values()].map((meta) => meta.filePath),
     ];
-    return buildFileLinkParentSuffixByPath(filePaths);
+    return [...new Set(filePaths)];
   }, [inlineCodeFileLinkMetaByText, markdownFileLinkMetaByHref]);
+  const candidateFilePathSet = useMemo(() => new Set(candidateFilePaths), [candidateFilePaths]);
+  const fileLinkParentSuffixByPath = useMemo(
+    // Labels stay computed over every candidate, so a path that resolves later
+    // keeps the disambiguating parent it renders with now.
+    () => buildFileLinkParentSuffixByPath(candidateFilePaths),
+    [candidateFilePaths],
+  );
+  const filePathStatus = useFilePathExistence(
+    threadRef?.environmentId ?? environmentId,
+    cwd,
+    candidateFilePaths,
+  );
   const markdownUrlTransform = useCallback((href: string) => {
     return rewriteMarkdownFileUriHref(href) ?? defaultUrlTransform(href);
   }, []);
@@ -1364,6 +1377,18 @@ function ChatMarkdown({
     [createAssetUrl, openPreview, preparedConnection, threadRef],
   );
   const markdownComponents = useMemo<Components>(() => {
+    /**
+     * Path-shaped text only becomes a file chip once the environment confirms
+     * the file is there. While the answer is outstanding the text renders as
+     * written, so a model id like `deepseek/deepseek-v3.2` never flashes as a
+     * link it cannot open. Paths the render found but the text scan did not —
+     * so no verdict was ever requested — keep the heuristic's answer.
+     */
+    const isOpenableFile = (fileLinkMeta: MarkdownFileLinkMeta) => {
+      if (!candidateFilePathSet.has(fileLinkMeta.filePath)) return true;
+      const status = filePathStatus(fileLinkMeta.filePath);
+      return status === "exists" || status === "unverified";
+    };
     const fileLinkChip = (
       fileLinkMeta: MarkdownFileLinkMeta,
       copyMarkdown: string,
@@ -1520,6 +1545,12 @@ function ChatMarkdown({
           );
         }
 
+        if (!isOpenableFile(fileLinkMeta)) {
+          // A link to a file that is not there opens nothing, and its href is a
+          // filesystem path the browser would try to navigate to — keep the
+          // label, drop the link.
+          return <span className={props.className}>{children}</span>;
+        }
         return fileLinkChip(
           fileLinkMeta,
           `[${fileLinkMeta.basename}](${normalizedHref})`,
@@ -1532,7 +1563,7 @@ function ChatMarkdown({
           const fileLinkMeta =
             inlineCodeFileLinkMetaByText.get(codeText.trim()) ??
             resolveInlineCodeFileLinkMeta(codeText, cwd);
-          if (fileLinkMeta) {
+          if (fileLinkMeta && isOpenableFile(fileLinkMeta)) {
             return fileLinkChip(fileLinkMeta, `\`${codeText}\``);
           }
         }
@@ -1578,9 +1609,11 @@ function ChatMarkdown({
       },
     };
   }, [
+    candidateFilePathSet,
     cwd,
     diffThemeName,
     fileLinkParentSuffixByPath,
+    filePathStatus,
     inlineCodeFileLinkMetaByText,
     isStreaming,
     markdownFileLinkMetaByHref,
