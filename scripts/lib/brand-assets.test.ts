@@ -4,6 +4,7 @@ import {
   BRAND_ASSET_PATHS,
   DEVELOPMENT_ICON_OVERRIDES,
   DEVELOPMENT_PUBLIC_ICON_OVERRIDES,
+  PRODUCTION_MARKETING_ICON_OVERRIDES,
   resolveWebAssetBrandForChannel,
   resolveWebAssetBrandForPackageVersion,
   resolveWebIconOverrides,
@@ -66,6 +67,13 @@ describe("brand-assets", () => {
     });
   });
 
+  it("maps production web assets into the marketing site", () => {
+    expect(PRODUCTION_MARKETING_ICON_OVERRIDES).toContainEqual({
+      sourceRelativePath: BRAND_ASSET_PATHS.productionWebAppleTouchIconPng,
+      targetRelativePath: "apps/marketing/public/apple-touch-icon.png",
+    });
+  });
+
   it("maps hosted nightly web assets to nightly icons", () => {
     expect(resolveWebIconOverrides("nightly", "apps/web/dist")).toContainEqual({
       sourceRelativePath: BRAND_ASSET_PATHS.nightlyWebFaviconIco,
@@ -93,6 +101,11 @@ describe("brand-assets", () => {
       "assets/nightly/app-icon.icon",
       "assets/prod/app-icon.icon",
     ]);
+    expect([
+      BRAND_ASSET_PATHS.developmentIconSvg,
+      BRAND_ASSET_PATHS.nightlyIconSvg,
+      BRAND_ASSET_PATHS.productionIconSvg,
+    ]).toEqual(["assets/dev/logo.svg", "assets/nightly/logo.svg", "assets/prod/logo.svg"]);
     expect(BRAND_ASSET_PATHS.developmentDesktopIconPng).toMatch(/^assets\/dev\/blueprint-/);
     expect(BRAND_ASSET_PATHS.nightlyMacIconPng).toMatch(/^assets\/nightly\/nightly-/);
     expect(BRAND_ASSET_PATHS.productionMacIconPng).toMatch(/^assets\/prod\/black-/);

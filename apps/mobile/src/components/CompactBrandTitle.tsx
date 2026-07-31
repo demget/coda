@@ -6,7 +6,7 @@ import type {
 import { Platform, View } from "react-native";
 
 import { AppText as Text } from "./AppText";
-import { T3Wordmark } from "./T3Wordmark";
+import { CodaMark } from "./CodaMark";
 import { IPAD_HOME_TITLE_OFFSET } from "../lib/layoutMetrics";
 import { resolveMobileStageLabel } from "../lib/mobileBranding";
 import { useThemeColor } from "../lib/useThemeColor";
@@ -28,6 +28,7 @@ export function CompactBrandTitle(
   const mutedColor = useThemeColor("--color-foreground-muted");
   const subtleColor = useThemeColor("--color-subtle");
   const stageLabel = resolveMobileStageLabel(Constants.expoConfig?.extra?.appVariant);
+  const showStageLabel = stageLabel !== "Dev";
   const titleOffset =
     Platform.OS !== "ios"
       ? 0
@@ -52,7 +53,7 @@ export function CompactBrandTitle(
         marginLeft: titleOffset,
       }}
     >
-      <T3Wordmark color={iconColor} height={15} />
+      <CodaMark color={iconColor} height={15} />
       <Text
         style={{
           color: mutedColor,
@@ -61,28 +62,30 @@ export function CompactBrandTitle(
           letterSpacing: -0.5,
         }}
       >
-        Code
+        Coda
       </Text>
-      <View
-        style={{
-          backgroundColor: subtleColor,
-          borderRadius: 999,
-          paddingHorizontal: 6,
-          paddingVertical: 2,
-        }}
-      >
-        <Text
+      {showStageLabel ? (
+        <View
           style={{
-            color: mutedColor,
-            fontFamily: "DMSans-Bold",
-            fontSize: 9,
-            letterSpacing: 0.9,
-            textTransform: "uppercase",
+            backgroundColor: subtleColor,
+            borderRadius: 999,
+            paddingHorizontal: 6,
+            paddingVertical: 2,
           }}
         >
-          {stageLabel}
-        </Text>
-      </View>
+          <Text
+            style={{
+              color: mutedColor,
+              fontFamily: "DMSans-Bold",
+              fontSize: 9,
+              letterSpacing: 0.9,
+              textTransform: "uppercase",
+            }}
+          >
+            {stageLabel}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }

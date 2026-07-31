@@ -307,18 +307,6 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     );
   }
 
-  .stage-blueprint {
-    --stage-bp-top: #67c2ff;
-    --stage-bp-mid: #347ff8;
-    --stage-bp-bottom: #1538d0;
-  }
-
-  .dark .stage-blueprint {
-    --stage-bp-top: #3a7ad1;
-    --stage-bp-mid: #2050ae;
-    --stage-bp-bottom: #101f6e;
-  }
-
   .workspace-topbar {
     display: flex;
     height: var(--workspace-topbar-height);

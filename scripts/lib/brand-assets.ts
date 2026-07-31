@@ -1,9 +1,16 @@
 export const BRAND_ASSET_PATHS = {
   developmentIconComposerProject: "assets/dev/app-icon.icon",
+  developmentIconSvg: "assets/dev/logo.svg",
+  developmentMacIconSvg: "assets/dev/logo-macos.svg",
   developmentIosIconPng: "assets/dev/blueprint-ios-1024.png",
   developmentUniversalIconPng: "assets/dev/blueprint-universal-1024.png",
 
   productionIconComposerProject: "assets/prod/app-icon.icon",
+  productionIconSvg: "assets/prod/logo.svg",
+  productionMacIconSvg: "assets/prod/logo-macos.svg",
+  productionAndroidDarkMarkSvg: "assets/prod/android-foreground-dark.svg",
+  productionAndroidLightMarkSvg: "assets/prod/android-foreground-light.svg",
+  productionAndroidNotificationSvg: "assets/prod/android-notification.svg",
   productionIosIconPng: "assets/prod/black-ios-1024.png",
   productionMacIconPng: "assets/prod/black-macos-1024.png",
   productionLinuxIconPng: "assets/prod/black-universal-1024.png",
@@ -12,8 +19,17 @@ export const BRAND_ASSET_PATHS = {
   productionWebFavicon16Png: "assets/prod/t3-black-web-favicon-16x16.png",
   productionWebFavicon32Png: "assets/prod/t3-black-web-favicon-32x32.png",
   productionWebAppleTouchIconPng: "assets/prod/t3-black-web-apple-touch-180.png",
+  mobileAndroidDarkMarkPng: "apps/mobile/assets/android-icon-mark-dark.png",
+  mobileAndroidLightMarkPng: "apps/mobile/assets/android-icon-mark.png",
+  mobileAndroidNotificationPng: "apps/mobile/assets/android-notification-icon.png",
+  marketingIconPng: "apps/marketing/public/icon.png",
+  desktopResourceIconPng: "apps/desktop/resources/icon.png",
+  desktopResourceIconIco: "apps/desktop/resources/icon.ico",
+  desktopResourceIconIcns: "apps/desktop/resources/icon.icns",
 
   nightlyIconComposerProject: "assets/nightly/app-icon.icon",
+  nightlyIconSvg: "assets/nightly/logo.svg",
+  nightlyMacIconSvg: "assets/nightly/logo-macos.svg",
   nightlyIosIconPng: "assets/nightly/nightly-ios-1024.png",
   nightlyMacIconPng: "assets/nightly/nightly-macos-1024.png",
   nightlyLinuxIconPng: "assets/nightly/nightly-universal-1024.png",
@@ -108,4 +124,9 @@ export const DEVELOPMENT_ICON_OVERRIDES = resolveWebIconOverrides("development",
 export const DEVELOPMENT_PUBLIC_ICON_OVERRIDES = resolveWebIconOverrides(
   "development",
   "apps/web/public",
+);
+
+export const PRODUCTION_MARKETING_ICON_OVERRIDES = resolveWebIconOverrides(
+  "production",
+  "apps/marketing/public",
 );
