@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { LoaderCircleIcon, MicIcon, SquareIcon } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { MicIcon } from "lucide-react";
 
 import { transcribeRecordedAudio } from "../../lib/geminiTranscription";
 import { cn } from "~/lib/utils";
@@ -10,11 +10,26 @@ import { formatVoiceRecordingElapsed } from "./voiceTranscription";
 
 const MAX_RECORDING_MS = 120_000;
 
-type VoiceTranscriptionPhase = "idle" | "requesting" | "recording" | "transcribing";
+export type VoiceTranscriptionPhase = "idle" | "requesting" | "recording" | "transcribing";
+
+interface VoiceTranscriptionPresentation {
+  readonly label: string;
+  readonly liveStatus: string;
+  readonly ribbonLabel: string;
+}
 
 interface VoiceTranscriptionButtonProps {
   readonly apiKey: string;
   readonly onTranscript: (transcript: string) => void;
+}
+
+interface VoiceSignalMarkProps {
+  readonly phase: VoiceTranscriptionPhase;
+}
+
+interface VoiceTranscriptionControlContentProps {
+  readonly elapsedLabel: string;
+  readonly phase: VoiceTranscriptionPhase;
 }
 
 function stopStream(stream: MediaStream | null): void {
@@ -31,6 +46,133 @@ function microphoneErrorDescription(error: unknown): string {
     }
   }
   return error instanceof Error ? error.message : "Coda could not start microphone recording.";
+}
+
+export function getVoiceTranscriptionPresentation(
+  phase: VoiceTranscriptionPhase,
+  elapsedLabel: string,
+): VoiceTranscriptionPresentation {
+  switch (phase) {
+    case "requesting":
+      return {
+        label: "Waiting for microphone permission",
+        liveStatus: "Waiting for microphone permission",
+        ribbonLabel: "Allow mic",
+      };
+    case "recording":
+      return {
+        label: `Stop recording (${elapsedLabel})`,
+        liveStatus: "Recording started",
+        ribbonLabel: elapsedLabel,
+      };
+    case "transcribing":
+      return {
+        label: "Transcribing recording",
+        liveStatus: "Transcribing recording",
+        ribbonLabel: "Transcribing",
+      };
+    case "idle":
+      return {
+        label: "Record voice message",
+        liveStatus: "",
+        ribbonLabel: "",
+      };
+  }
+}
+
+function VoiceSignalMark({ phase }: VoiceSignalMarkProps) {
+  const heights =
+    phase === "recording"
+      ? [4, 9, 13, 7, 3]
+      : phase === "transcribing"
+        ? [3, 6, 10, 6, 3]
+        : [3, 4, 7, 4, 3];
+
+  return (
+    <svg
+      aria-hidden="true"
+      className="size-4 overflow-visible"
+      data-voice-signal-mark
+      viewBox="0 0 18 14"
+    >
+      {heights.map((height, index) => {
+        const x = 1.5 + index * 3.75;
+        const inset = (14 - height) / 2;
+        return (
+          <line
+            key={x}
+            x1={x}
+            x2={x}
+            y1={inset}
+            y2={14 - inset}
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeWidth="1.8"
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+function VoiceStopMark() {
+  return (
+    <svg aria-hidden="true" className="size-3" data-voice-stop-mark viewBox="0 0 12 12">
+      <rect x="2" y="2" width="8" height="8" rx="1.75" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function VoiceTranscriptionControlContent(props: VoiceTranscriptionControlContentProps) {
+  const { elapsedLabel, phase } = props;
+  const isActive = phase !== "idle";
+  const presentation = getVoiceTranscriptionPresentation(phase, elapsedLabel);
+
+  return (
+    <span className="flex w-full min-w-0 items-center justify-center">
+      <span className="relative flex size-4 shrink-0 items-center justify-center">
+        <span
+          className={cn(
+            "absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+            isActive ? "scale-[0.25] opacity-0 blur-[4px]" : "scale-100 opacity-100 blur-0",
+          )}
+        >
+          <ComposerControlIcon icon={MicIcon} />
+        </span>
+        <span
+          className={cn(
+            "absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+            isActive ? "scale-100 opacity-100 blur-0" : "scale-[0.25] opacity-0 blur-[4px]",
+          )}
+        >
+          <VoiceSignalMark phase={phase} />
+        </span>
+      </span>
+
+      {isActive ? (
+        <>
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate text-left font-medium text-xs leading-none",
+              phase === "recording" && "tabular-nums",
+            )}
+          >
+            {presentation.ribbonLabel}
+          </span>
+          <span
+            className={cn(
+              "flex size-3.5 shrink-0 items-center justify-center transition-[opacity,filter,scale] duration-300 [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+              phase === "recording"
+                ? "scale-100 opacity-100 blur-0"
+                : "scale-[0.25] opacity-0 blur-[4px]",
+            )}
+          >
+            <VoiceStopMark />
+          </span>
+        </>
+      ) : null}
+    </span>
+  );
 }
 
 export function VoiceTranscriptionButton(props: VoiceTranscriptionButtonProps) {
@@ -242,62 +384,47 @@ export function VoiceTranscriptionButton(props: VoiceTranscriptionButtonProps) {
   }, [startRecording, stopRecording]);
 
   const elapsedLabel = formatVoiceRecordingElapsed(elapsedSeconds);
-  let label: string;
-  let buttonContent: ReactNode;
-  switch (phase) {
-    case "requesting":
-      label = "Waiting for microphone permission";
-      buttonContent = (
-        <>
-          <LoaderCircleIcon aria-hidden="true" className="size-4" />
-          <span className="hidden sm:inline">Permission…</span>
-        </>
-      );
-      break;
-    case "recording":
-      label = `Stop recording (${elapsedLabel})`;
-      buttonContent = (
-        <>
-          <SquareIcon aria-hidden="true" className="size-3.5 fill-current" />
-          <span>{elapsedLabel}</span>
-        </>
-      );
-      break;
-    case "transcribing":
-      label = "Transcribing recording";
-      buttonContent = (
-        <>
-          <LoaderCircleIcon aria-hidden="true" className="size-4" />
-          <span className="hidden sm:inline">Transcribing…</span>
-        </>
-      );
-      break;
-    default:
-      label = "Record voice message";
-      buttonContent = <ComposerControlIcon icon={MicIcon} />;
-  }
+  const presentation = getVoiceTranscriptionPresentation(phase, elapsedLabel);
+  const isActive = phase !== "idle";
+  const isRecording = phase === "recording";
+  const isBusy = phase === "requesting" || phase === "transcribing";
 
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <ComposerControl
-            aria-label={label}
-            className={cn(
-              "shrink-0 tabular-nums",
-              phase === "recording" &&
-                "bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive",
-            )}
-            disabled={phase === "requesting" || phase === "transcribing"}
-            onClick={handleClick}
-            onPointerDown={(event) => event.preventDefault()}
-            type="button"
-          />
-        }
-      >
-        {buttonContent}
-      </TooltipTrigger>
-      <TooltipPopup side="top">{label}</TooltipPopup>
-    </Tooltip>
+    <>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <ComposerControl
+              aria-busy={isBusy || undefined}
+              aria-label={presentation.label}
+              aria-pressed={isRecording}
+              className={cn(
+                "h-8 min-h-8 shrink-0 px-0 after:absolute after:left-1/2 after:top-1/2 after:min-h-10 after:min-w-10 after:-translate-x-1/2 after:-translate-y-1/2 active:not-disabled:scale-[0.96] motion-reduce:transition-none pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11",
+                "transition-[width,background-color,color,box-shadow,scale] duration-200 [transition-timing-function:cubic-bezier(0.2,0,0,1)]",
+                isActive ? "w-[8.25rem]" : "w-9",
+                isRecording
+                  ? "bg-[oklch(0.94_0.028_28)] text-[oklch(0.46_0.145_28)] inset-shadow-[0_1px_--theme(--color-white/38%)] hover:bg-[oklch(0.92_0.038_28)] hover:text-[oklch(0.42_0.145_28)] dark:bg-[oklch(0.32_0.052_28)] dark:text-[oklch(0.82_0.095_28)] dark:inset-shadow-[0_1px_--theme(--color-white/10%)] dark:hover:bg-[oklch(0.35_0.06_28)] dark:hover:text-[oklch(0.86_0.095_28)]"
+                  : isActive
+                    ? "bg-foreground/[0.055] text-foreground/72 inset-shadow-[0_1px_--theme(--color-white/28%)] disabled:opacity-100 dark:inset-shadow-[0_1px_--theme(--color-white/8%)]"
+                    : "text-muted-foreground/70 hover:text-foreground/80",
+                isBusy && "cursor-wait",
+                isActive ? "[&>span]:gap-1.5 [&>span]:px-2" : "[&>span]:px-0",
+              )}
+              data-voice-transcription-phase={phase}
+              disabled={isBusy}
+              onClick={handleClick}
+              onPointerDown={(event) => event.preventDefault()}
+              type="button"
+            />
+          }
+        >
+          <VoiceTranscriptionControlContent elapsedLabel={elapsedLabel} phase={phase} />
+        </TooltipTrigger>
+        <TooltipPopup side="top">{presentation.label}</TooltipPopup>
+      </Tooltip>
+      <span aria-live="polite" className="sr-only" role="status">
+        {presentation.liveStatus}
+      </span>
+    </>
   );
 }

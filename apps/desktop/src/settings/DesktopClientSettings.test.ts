@@ -112,6 +112,33 @@ describe("DesktopClientSettings", () => {
     ),
   );
 
+  it.effect("reloads the Gemini voice key after recreating the desktop settings service", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-desktop-client-settings-restart-test-",
+      });
+
+      yield* Effect.gen(function* () {
+        const settings = yield* DesktopClientSettings.DesktopClientSettings;
+        yield* settings.set(clientSettings);
+      }).pipe(Effect.provide(makeLayer(baseDir)));
+
+      const reloadedSettings = yield* Effect.gen(function* () {
+        const settings = yield* DesktopClientSettings.DesktopClientSettings;
+        return yield* settings.get;
+      }).pipe(Effect.provide(makeLayer(baseDir)));
+
+      assert.isTrue(Option.isSome(reloadedSettings));
+      if (Option.isSome(reloadedSettings)) {
+        assert.equal(
+          reloadedSettings.value.voiceTranscriptionGeminiApiKey,
+          clientSettings.voiceTranscriptionGeminiApiKey,
+        );
+      }
+    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+  );
+
   it.effect("reports the failed client settings write operation and path", () =>
     withClientSettings(
       Effect.gen(function* () {
