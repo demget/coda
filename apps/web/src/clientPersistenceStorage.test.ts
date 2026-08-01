@@ -45,6 +45,7 @@ describe("clientPersistenceStorage", () => {
     const settings = {
       ...DEFAULT_CLIENT_SETTINGS,
       timestampFormat: "24-hour" as const,
+      voiceTranscriptionGeminiApiKey: "test-gemini-key",
     };
 
     writeBrowserClientSettings(settings);
