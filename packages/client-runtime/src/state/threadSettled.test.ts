@@ -154,7 +154,7 @@ describe("effectiveSettled", () => {
     },
   );
 
-  it("treats closed change requests like merged ones", () => {
+  it("keeps closed-but-unmerged change requests active", () => {
     const shell = makeShell({ activityAt: null });
     expect(
       effectiveSettled(shell, {
@@ -162,20 +162,18 @@ describe("effectiveSettled", () => {
         autoSettleAfterDays: null,
         changeRequestState: "closed",
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("settles immediately when a change request merges or closes", () => {
+  it("settles immediately when a change request merges", () => {
     const recentlyActive = makeShell({ activityAt: "2026-04-09T23:59:59.999Z" });
-    for (const changeRequestState of ["merged", "closed"] as const) {
-      expect(
-        effectiveSettled(recentlyActive, {
-          now: NOW,
-          autoSettleAfterDays: null,
-          changeRequestState,
-        }),
-      ).toBe(true);
-    }
+    expect(
+      effectiveSettled(recentlyActive, {
+        now: NOW,
+        autoSettleAfterDays: null,
+        changeRequestState: "merged",
+      }),
+    ).toBe(true);
   });
 
   it("never auto-settles a stale thread with an open change request", () => {

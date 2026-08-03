@@ -404,8 +404,8 @@ function ThreadNavigationSidebarPane(
 
   // Thread List v2 (beta) support — same model as the compact Home list
   // (HomeScreen.tsx): flat creation-order card block + settled recency tail.
-  // PR states stream in per-row; merged/closed PRs auto-settle their thread
-  // on the next partition.
+  // PR states stream in per-row; merged PRs auto-settle their thread on the
+  // next partition.
   const [changeRequestStateByKey, setChangeRequestStateByKey] = useState<
     ReadonlyMap<string, "open" | "closed" | "merged">
   >(() => new Map());
