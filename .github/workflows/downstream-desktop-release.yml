@@ -45,6 +45,7 @@ jobs:
           sparse-checkout: |
             /*
             !/.repos/
+            !/.claude/worktrees/
           sparse-checkout-cone-mode: false
 
       - name: Setup Node
@@ -221,6 +222,7 @@ jobs:
           sparse-checkout: |
             /*
             !/.repos/
+            !/.claude/worktrees/
           sparse-checkout-cone-mode: false
 
       - name: Download candidate source
@@ -287,6 +289,7 @@ jobs:
           sparse-checkout: |
             /*
             !/.repos/
+            !/.claude/worktrees/
           sparse-checkout-cone-mode: false
 
       - name: Download candidate source
@@ -362,6 +365,7 @@ jobs:
           sparse-checkout: |
             /*
             !/.repos/
+            !/.claude/worktrees/
           sparse-checkout-cone-mode: false
 
       - name: Download candidate source
@@ -486,6 +490,11 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/.claude/worktrees/
+          sparse-checkout-cone-mode: false
 
       - name: Download candidate source
         uses: actions/download-artifact@v8
