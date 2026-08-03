@@ -1,9 +1,10 @@
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
+import { APP_RELEASE_REPOSITORY } from "../branding";
 import { isWindowsPlatform } from "../lib/utils";
 
 export type DesktopUpdateButtonAction = "download" | "install" | "none";
 
-const DESKTOP_RELEASE_TAG_URL = "https://github.com/pingdotgg/t3code/releases/tag";
+const GITHUB_REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
 
 /**
  * The main process fills `downloadedVersion` from the updater's `update-downloaded`
@@ -15,10 +16,13 @@ export function getDesktopUpdateDownloadedVersion(state: DesktopUpdateState): st
 }
 
 /** Release notes for an exact downloaded build; nightly suffixes are part of the tag. */
-export function getDesktopUpdateReleaseUrl(version: string | null): string | null {
+export function getDesktopUpdateReleaseUrl(
+  version: string | null,
+  releaseRepository = APP_RELEASE_REPOSITORY,
+): string | null {
   const normalizedVersion = version?.trim();
-  if (!normalizedVersion) return null;
-  return `${DESKTOP_RELEASE_TAG_URL}/v${encodeURIComponent(normalizedVersion)}`;
+  if (!normalizedVersion || !GITHUB_REPOSITORY_PATTERN.test(releaseRepository)) return null;
+  return `https://github.com/${releaseRepository}/releases/tag/v${encodeURIComponent(normalizedVersion)}`;
 }
 
 export function resolveDesktopUpdateButtonAction(

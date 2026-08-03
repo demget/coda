@@ -69,6 +69,7 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.backendCwd, "/repo");
       assert.equal(environment.appUserModelId, "com.coda.app.dev");
       assert.equal(environment.linuxWmClass, "coda-dev");
+      assert.equal(environment.branding.releaseRepository, "demget/coda");
       assert.deepEqual(
         Option.map(environment.devServerUrl, (url) => url.href),
         Option.some("http://localhost:5173/"),
@@ -95,6 +96,17 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.logDir, "/tmp/t3/userdata/logs");
       assert.equal(environment.browserArtifactsDir, "/tmp/t3/userdata/browser-artifacts");
       assert.equal(environment.serverSettingsPath, "/tmp/t3/userdata/settings.json");
+    }),
+  );
+
+  it.effect("brands downstream desktop snapshots as Nightly", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment({
+        appVersion: "0.0.32-nightly.20260803.992.coda.1.44",
+      });
+
+      assert.equal(environment.branding.stageLabel, "Nightly");
+      assert.equal(environment.branding.displayName, "Coda (Nightly)");
     }),
   );
 

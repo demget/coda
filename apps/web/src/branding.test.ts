@@ -29,6 +29,7 @@ describe("branding", () => {
             baseName: "Coda",
             stageLabel: "Nightly",
             displayName: "Coda (Nightly)",
+            releaseRepository: "example/coda",
           }),
         },
       },
@@ -39,6 +40,7 @@ describe("branding", () => {
     expect(branding.APP_BASE_NAME).toBe("Coda");
     expect(branding.APP_STAGE_LABEL).toBe("Nightly");
     expect(branding.APP_DISPLAY_NAME).toBe("Coda (Nightly)");
+    expect(branding.APP_RELEASE_REPOSITORY).toBe("example/coda");
   });
 
   it("normalizes hosted app channel metadata", async () => {

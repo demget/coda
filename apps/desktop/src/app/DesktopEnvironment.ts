@@ -81,6 +81,7 @@ export class DesktopEnvironment extends Context.Service<
 >()("@t3tools/desktop/app/DesktopEnvironment") {}
 
 const APP_BASE_NAME = "Coda";
+const APP_RELEASE_REPOSITORY = "demget/coda";
 
 function resolveDesktopAppStageLabel(input: {
   readonly isDevelopment: boolean;
@@ -102,6 +103,7 @@ function resolveDesktopAppBranding(input: {
     baseName: APP_BASE_NAME,
     stageLabel,
     displayName: `${APP_BASE_NAME} (${stageLabel})`,
+    releaseRepository: APP_RELEASE_REPOSITORY,
   };
 }
 
