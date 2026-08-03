@@ -53,5 +53,9 @@ issues. It intentionally does not publish npm packages, deploy a relay or hosted
 mobile clients, use Blacksmith runners, or require Clerk, Vercel, EAS, Cloudflare, Apple, or Azure
 secrets.
 
+The root `.gitmodules` only describes gitlinks already tracked by the repository so GitHub's
+checkout action can clean up credentials. All workflow checkouts keep submodule initialization
+disabled and exclude `.repos` and local `.claude/worktrees` content.
+
 Use **Actions → Sync Upstream and Release Desktop → Run workflow** for an immediate run. The manual
 `force` option produces a new snapshot even if official upstream has not moved.

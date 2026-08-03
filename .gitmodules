@@ -1,0 +1,9 @@
+[submodule ".claude/worktrees/kimi-provider"]
+	path = .claude/worktrees/kimi-provider
+	url = https://github.com/demget/coda.git
+[submodule ".claude/worktrees/path-highlight-validate"]
+	path = .claude/worktrees/path-highlight-validate
+	url = https://github.com/demget/coda.git
+[submodule ".repos/alchemy-effect/.vendor/alchemy"]
+	path = .repos/alchemy-effect/.vendor/alchemy
+	url = https://github.com/alchemy-run/alchemy.git
