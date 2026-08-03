@@ -16,9 +16,10 @@ desktop platforms before publishing anything. It then:
    `.coda-upstream/upstream.json`.
 
 If the rebase conflicts, no build, release, or branch update occurs. The run uploads a collision
-report and opens or refreshes the `[automation] Upstream sync conflict` issue. Resolve that rebase on
-`main`, update the recorded `mainSha` only when the Coda commit stack is based on that exact official
-commit, and rerun the workflow.
+report and, when repository Issues are enabled, opens or refreshes the
+`[automation] Upstream sync conflict` issue. Resolve that rebase on `main`, update the recorded
+`mainSha` only when the Coda commit stack is based on that exact official commit, and rerun the
+workflow.
 
 ## Release identity
 

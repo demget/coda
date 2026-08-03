@@ -53,6 +53,19 @@ jobs:
         with:
           node-version-file: package.json
 
+      - name: Hydrate complete Git history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --refetch --no-filter --no-tags origin \
+            '+refs/heads/*:refs/remotes/origin/*' \
+            '+refs/tags/*:refs/tags/*'
+          git rev-list --objects --all --missing=print > "$RUNNER_TEMP/reachable-objects.txt"
+          if grep -q '^?' "$RUNNER_TEMP/reachable-objects.txt"; then
+            echo "The downstream repository still has promised Git objects after a full refetch." >&2
+            exit 1
+          fi
+
       - id: checkout_state
         name: Record downstream head
         shell: bash
@@ -182,6 +195,7 @@ jobs:
 
       - name: Open or refresh conflict issue
         if: steps.rebase.outputs.conflicted == 'true'
+        continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
