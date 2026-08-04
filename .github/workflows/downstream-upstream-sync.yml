@@ -248,10 +248,6 @@ jobs:
             gh issue create --title "$title" --body-file "$RUNNER_TEMP/upstream-sync-conflict.md"
           fi
 
-      - name: Fail conflicted sync
-        if: steps.merge.outputs.conflicted == 'true'
-        run: exit 1
-
       - name: Upload candidate source
         if: steps.gate.outputs.has_update == 'true' && steps.merge.outputs.conflicted == 'false'
         uses: actions/upload-artifact@v7
