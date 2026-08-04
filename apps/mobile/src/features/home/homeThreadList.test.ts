@@ -137,7 +137,7 @@ describe("buildHomeThreadGroups", () => {
       environmentId: remoteEnvironmentId,
       id: ProjectId.make("project-stale"),
       title: "t3code",
-      workspaceRoot: "/remote/t3code",
+      workspaceRoot: "/remote/coda",
       updatedAt: "2026-06-01T00:00:00.000Z",
     });
     const canonicalRemote = makeProject({
@@ -201,7 +201,7 @@ describe("buildHomeThreadGroups", () => {
         environmentId: remoteEnvironmentId,
         id: ProjectId.make("project-remote-with-identity"),
         title: "t3code",
-        workspaceRoot: "/remote/t3code",
+        workspaceRoot: "/remote/coda",
         repositoryIdentity,
         updatedAt: "2026-06-01T00:00:00.000Z",
       }),
@@ -537,7 +537,7 @@ describe("buildHomeThreadGroups", () => {
       owner: "t3tools",
       name: "t3code",
       displayName: "Coda",
-      rootPath: "/workspaces/t3code",
+      rootPath: "/workspaces/coda",
     };
     const projects = [
       makeProject({
