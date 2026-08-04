@@ -1,0 +1,416 @@
+name: Propose Upstream Sync
+
+on:
+  schedule:
+    - cron: "20 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Refresh the sync PR even when upstream has not moved
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: downstream-upstream-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Prepare upstream merge
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      has_update: ${{ steps.gate.outputs.has_update }}
+      conflicted: ${{ steps.merge.outputs.conflicted }}
+      candidate_sha: ${{ steps.merge.outputs.candidate_sha }}
+      old_head: ${{ steps.checkout_state.outputs.old_head }}
+      old_main_sha: ${{ steps.resolve.outputs.old_main_sha }}
+      official_tag: ${{ steps.resolve.outputs.official_tag }}
+      source_sha: ${{ steps.resolve.outputs.source_sha }}
+      repository: ${{ steps.official.outputs.repository }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Checkout Coda main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/.claude/worktrees/
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Hydrate complete Git history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --refetch --no-filter --no-tags origin \
+            '+refs/heads/*:refs/remotes/origin/*' \
+            '+refs/tags/*:refs/tags/*'
+          git rev-list --objects --all --missing=print > "$RUNNER_TEMP/reachable-objects.txt"
+          if grep -q '^?' "$RUNNER_TEMP/reachable-objects.txt"; then
+            echo "The Coda repository still has promised Git objects after a full refetch." >&2
+            exit 1
+          fi
+
+      - id: checkout_state
+        name: Record Coda head
+        shell: bash
+        run: echo "old_head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - id: official
+        name: Read official release and main metadata
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repository="$(jq -r .repository .coda-upstream/upstream.json)"
+          branch="$(jq -r .branch .coda-upstream/upstream.json)"
+          gh api "repos/$repository/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          node scripts/downstream-sync.ts latest \
+            --releases "$RUNNER_TEMP/releases.json" > "$RUNNER_TEMP/latest.json"
+          tag="$(jq -r .tag "$RUNNER_TEMP/latest.json")"
+          gh api "repos/$repository/commits/$branch" > "$RUNNER_TEMP/main.json"
+          gh api "repos/$repository/compare/$tag...$branch" > "$RUNNER_TEMP/compare.json"
+          echo "repository=$repository" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - id: resolve
+        name: Resolve upstream movement
+        shell: bash
+        env:
+          FORCE_SYNC: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
+        run: |
+          set -euo pipefail
+          args=(
+            resolve
+            --releases "$RUNNER_TEMP/releases.json"
+            --state .coda-upstream/upstream.json
+            --main "$RUNNER_TEMP/main.json"
+            --compare "$RUNNER_TEMP/compare.json"
+            --run-number "$GITHUB_RUN_NUMBER"
+            --github-output
+          )
+          if [[ "$FORCE_SYNC" == "true" ]]; then
+            args+=(--force)
+          fi
+          node scripts/downstream-sync.ts "${args[@]}"
+
+      - id: gate
+        name: Skip an already-current sync PR
+        shell: bash
+        env:
+          FORCE_SYNC: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
+          RESOLVED_UPDATE: ${{ steps.resolve.outputs.has_update }}
+          SOURCE_SHA: ${{ steps.resolve.outputs.source_sha }}
+          OLD_HEAD: ${{ steps.checkout_state.outputs.old_head }}
+        run: |
+          set -euo pipefail
+          if [[ "$RESOLVED_UPDATE" != "true" ]]; then
+            echo "has_update=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$FORCE_SYNC" == "true" ]]; then
+            echo "has_update=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          proposal_ref="refs/remotes/origin/automation/upstream-sync"
+          if git show-ref --verify --quiet "$proposal_ref" && \
+            git merge-base --is-ancestor "$OLD_HEAD" "$proposal_ref"; then
+            proposed_source="$(git show "$proposal_ref:.coda-upstream/upstream.json" | jq -r .mainSha)"
+            if [[ "$proposed_source" == "$SOURCE_SHA" ]]; then
+              echo "has_update=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "has_update=true" >> "$GITHUB_OUTPUT"
+
+      - id: merge
+        name: Merge upstream in isolation
+        if: steps.gate.outputs.has_update == 'true'
+        shell: bash
+        env:
+          UPSTREAM_REPOSITORY: ${{ steps.official.outputs.repository }}
+          UPSTREAM_BRANCH: ${{ steps.official.outputs.branch }}
+          OFFICIAL_TAG: ${{ steps.resolve.outputs.official_tag }}
+          OFFICIAL_MAIN_SHA: ${{ steps.resolve.outputs.source_sha }}
+          OFFICIAL_NIGHTLY_SHA: ${{ steps.resolve.outputs.nightly_sha }}
+          OLD_MAIN_SHA: ${{ steps.resolve.outputs.old_main_sha }}
+          OLD_HEAD: ${{ steps.checkout_state.outputs.old_head }}
+          RELEASE_VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          git remote add official "https://github.com/$UPSTREAM_REPOSITORY.git"
+          git fetch --no-tags official \
+            "+refs/heads/$UPSTREAM_BRANCH:refs/coda/official-main" \
+            "+refs/tags/$OFFICIAL_TAG:refs/coda/official-nightly"
+
+          test "$(git rev-parse refs/coda/official-main)" = "$OFFICIAL_MAIN_SHA"
+          test "$(git rev-parse 'refs/coda/official-nightly^{commit}')" = "$OFFICIAL_NIGHTLY_SHA"
+          git merge-base --is-ancestor "$OLD_MAIN_SHA" "$OLD_HEAD"
+          git merge-base --is-ancestor "$OLD_MAIN_SHA" "$OFFICIAL_MAIN_SHA"
+          git merge-base --is-ancestor "$OFFICIAL_NIGHTLY_SHA" "$OFFICIAL_MAIN_SHA"
+
+          git diff --name-only "$OLD_MAIN_SHA" "$OFFICIAL_MAIN_SHA" > "$RUNNER_TEMP/upstream-paths.txt"
+          git diff --name-only "$OLD_MAIN_SHA" "$OLD_HEAD" > "$RUNNER_TEMP/customization-paths.txt"
+
+          candidate_dir="$RUNNER_TEMP/coda-candidate"
+          git worktree add --detach "$candidate_dir" "$OLD_HEAD"
+          git -C "$candidate_dir" config user.name "Coda upstream sync"
+          git -C "$candidate_dir" config user.email "actions@users.noreply.github.com"
+
+          if [[ "$OLD_MAIN_SHA" != "$OFFICIAL_MAIN_SHA" ]]; then
+            if ! git -C "$candidate_dir" merge --no-commit --no-ff "$OFFICIAL_MAIN_SHA" \
+              2> "$RUNNER_TEMP/merge-error.txt"; then
+              git -C "$candidate_dir" diff --name-only --diff-filter=U \
+                > "$RUNNER_TEMP/unmerged-paths.txt"
+              node scripts/downstream-sync.ts report \
+                --old-sha "$OLD_MAIN_SHA" \
+                --new-tag "$OFFICIAL_TAG" \
+                --new-sha "$OFFICIAL_MAIN_SHA" \
+                --upstream-paths "$RUNNER_TEMP/upstream-paths.txt" \
+                --customization-paths "$RUNNER_TEMP/customization-paths.txt" \
+                --unmerged-paths "$RUNNER_TEMP/unmerged-paths.txt" \
+                --rebase-error "$RUNNER_TEMP/merge-error.txt" \
+                --output "$RUNNER_TEMP/upstream-sync-conflict.md"
+              git -C "$candidate_dir" merge --abort || true
+              echo "conflicted=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          jq -n \
+            --arg repository "$UPSTREAM_REPOSITORY" \
+            --arg branch "$UPSTREAM_BRANCH" \
+            --arg mainSha "$OFFICIAL_MAIN_SHA" \
+            --arg nightlyTag "$OFFICIAL_TAG" \
+            --arg nightlySha "$OFFICIAL_NIGHTLY_SHA" \
+            --arg version "$RELEASE_VERSION" \
+            '{repository: $repository, branch: $branch, mainSha: $mainSha, nightlyTag: $nightlyTag, nightlySha: $nightlySha, version: $version}' \
+            > "$candidate_dir/.coda-upstream/upstream.json"
+          git -C "$candidate_dir" add .coda-upstream/upstream.json
+          if [[ "$OLD_MAIN_SHA" != "$OFFICIAL_MAIN_SHA" ]]; then
+            git -C "$candidate_dir" commit -m "chore(sync): merge upstream $OFFICIAL_TAG"
+          else
+            git -C "$candidate_dir" commit -m "chore(sync): refresh $RELEASE_VERSION"
+          fi
+
+          candidate_sha="$(git -C "$candidate_dir" rev-parse HEAD)"
+          git update-ref refs/coda/candidate "$candidate_sha"
+          git bundle create "$RUNNER_TEMP/candidate.bundle" refs/coda/candidate "^$OLD_HEAD"
+          git bundle verify "$RUNNER_TEMP/candidate.bundle"
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+          echo "conflicted=false" >> "$GITHUB_OUTPUT"
+
+      - name: Upload conflict report
+        if: steps.merge.outputs.conflicted == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: upstream-sync-conflict
+          path: ${{ runner.temp }}/upstream-sync-conflict.md
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create or refresh the single conflict issue
+        if: steps.merge.outputs.conflicted == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          title="[automation] Upstream sync conflict"
+          number="$(gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/issues?state=all&per_page=100" \
+            --jq '.[] | select(.pull_request == null and .title == "[automation] Upstream sync conflict") | .number' \
+            | head -n 1)"
+          if [[ -n "$number" ]]; then
+            state="$(gh api "repos/$GITHUB_REPOSITORY/issues/$number" --jq .state)"
+            if [[ "$state" == "closed" ]]; then
+              gh issue reopen "$number"
+            fi
+            gh issue edit "$number" --body-file "$RUNNER_TEMP/upstream-sync-conflict.md"
+          else
+            gh issue create --title "$title" --body-file "$RUNNER_TEMP/upstream-sync-conflict.md"
+          fi
+
+      - name: Fail conflicted sync
+        if: steps.merge.outputs.conflicted == 'true'
+        run: exit 1
+
+      - name: Upload candidate source
+        if: steps.gate.outputs.has_update == 'true' && steps.merge.outputs.conflicted == 'false'
+        uses: actions/upload-artifact@v7
+        with:
+          name: downstream-candidate
+          path: ${{ runner.temp }}/candidate.bundle
+          if-no-files-found: error
+          retention-days: 3
+
+  validate:
+    name: Validate candidate
+    needs: prepare
+    if: needs.prepare.outputs.has_update == 'true' && needs.prepare.outputs.conflicted == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Coda main
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/.claude/worktrees/
+          sparse-checkout-cone-mode: false
+
+      - name: Download candidate source
+        uses: actions/download-artifact@v8
+        with:
+          name: downstream-candidate
+          path: ${{ runner.temp }}/candidate
+
+      - name: Checkout candidate source
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ needs.prepare.outputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          git fetch "$RUNNER_TEMP/candidate/candidate.bundle" refs/coda/candidate
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: |
+            args:
+              - --filter=@t3tools/desktop...
+              - --filter=@t3tools/web...
+              - --filter=@t3tools/contracts...
+              - --filter=@t3tools/scripts...
+
+      - name: Ensure Electron runtime is installed
+        run: vp run --filter @t3tools/desktop ensure:electron
+
+      - name: Run focused tests
+        run: |
+          (cd scripts && vp test run downstream-sync.test.ts build-desktop-artifact.test.ts)
+          (cd apps/desktop && vp test run --passWithNoTests \
+            src/app/DesktopEnvironment.test.ts \
+            src/updates/DesktopUpdates.test.ts)
+          (cd apps/web && vp test run --passWithNoTests --project unit \
+            src/branding.test.ts \
+            src/components/desktopUpdate.logic.test.ts)
+
+      - name: Typecheck desktop surfaces
+        run: |
+          vp run --filter @t3tools/contracts typecheck
+          vp run --filter @t3tools/desktop typecheck
+          vp run --filter @t3tools/web typecheck
+
+  propose:
+    name: Create or refresh sync PR
+    needs: [prepare, validate]
+    if: needs.prepare.outputs.has_update == 'true' && needs.prepare.outputs.conflicted == 'false' && needs.validate.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout Coda main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Download candidate source
+        uses: actions/download-artifact@v8
+        with:
+          name: downstream-candidate
+          path: ${{ runner.temp }}/candidate
+
+      - name: Push proposal branch
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ needs.prepare.outputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          branch="automation/upstream-sync"
+          git fetch "$RUNNER_TEMP/candidate/candidate.bundle" refs/coda/candidate
+          test "$(git rev-parse FETCH_HEAD)" = "$CANDIDATE_SHA"
+          remote_sha="$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)"
+          if [[ -n "$remote_sha" ]]; then
+            git push origin "$CANDIDATE_SHA:refs/heads/$branch" \
+              --force-with-lease="refs/heads/$branch:$remote_sha"
+          else
+            git push origin "$CANDIDATE_SHA:refs/heads/$branch"
+          fi
+
+      - name: Create deterministic PR description
+        shell: bash
+        env:
+          UPSTREAM_REPOSITORY: ${{ needs.prepare.outputs.repository }}
+          OLD_MAIN_SHA: ${{ needs.prepare.outputs.old_main_sha }}
+          OFFICIAL_MAIN_SHA: ${{ needs.prepare.outputs.source_sha }}
+          OFFICIAL_TAG: ${{ needs.prepare.outputs.official_tag }}
+        run: |
+          set -euo pipefail
+          git log --reverse --format='%H%x09%s' "$OLD_MAIN_SHA..$OFFICIAL_MAIN_SHA" \
+            > "$RUNNER_TEMP/upstream-commits.tsv"
+          node scripts/downstream-sync.ts proposal \
+            --repository "$UPSTREAM_REPOSITORY" \
+            --old-sha "$OLD_MAIN_SHA" \
+            --new-sha "$OFFICIAL_MAIN_SHA" \
+            --new-tag "$OFFICIAL_TAG" \
+            --commits "$RUNNER_TEMP/upstream-commits.tsv" \
+            --workflow-run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --output "$RUNNER_TEMP/upstream-sync-pr.md"
+
+      - name: Create or refresh pull request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OFFICIAL_TAG: ${{ needs.prepare.outputs.official_tag }}
+        run: |
+          set -euo pipefail
+          branch="automation/upstream-sync"
+          title="chore(sync): merge upstream $OFFICIAL_TAG"
+          number="$(gh pr list --state open --head "$branch" --json number --jq '.[0].number // empty')"
+          if [[ -n "$number" ]]; then
+            gh pr edit "$number" --title "$title" --body-file "$RUNNER_TEMP/upstream-sync-pr.md"
+          else
+            gh pr create --base main --head "$branch" --title "$title" \
+              --body-file "$RUNNER_TEMP/upstream-sync-pr.md"
+          fi
+
+      - name: Close a resolved conflict issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          number="$(gh issue list --state open --limit 100 --json number,title \
+            --jq '.[] | select(.title == "[automation] Upstream sync conflict") | .number' \
+            | head -n 1)"
+          if [[ -n "$number" ]]; then
+            gh issue close "$number" --comment "A conflict-free upstream sync PR is now available."
+          fi

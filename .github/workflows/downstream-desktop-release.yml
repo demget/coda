@@ -1,15 +1,12 @@
-name: Sync Upstream and Release Desktop
+name: Release Coda Desktop
 
 on:
-  schedule:
-    - cron: "20 */3 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - .coda-upstream/upstream.json
   workflow_dispatch:
-    inputs:
-      force:
-        description: Build a new snapshot even when upstream has not moved
-        required: false
-        default: true
-        type: boolean
 
 concurrency:
   group: downstream-desktop-release
@@ -19,241 +16,64 @@ permissions:
   contents: read
 
 jobs:
-  sync_source:
-    name: Prepare rebased source
+  source:
+    name: Read release checkpoint
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 5
     permissions:
       contents: read
-      issues: write
     outputs:
-      has_update: ${{ steps.resolve.outputs.has_update }}
-      conflicted: ${{ steps.rebase.outputs.conflicted }}
-      candidate_sha: ${{ steps.rebase.outputs.candidate_sha }}
-      old_head: ${{ steps.checkout_state.outputs.old_head }}
-      tag: ${{ steps.resolve.outputs.tag }}
-      version: ${{ steps.resolve.outputs.version }}
-      official_tag: ${{ steps.resolve.outputs.official_tag }}
-      source_sha: ${{ steps.resolve.outputs.source_sha }}
+      already_published: ${{ steps.metadata.outputs.already_published }}
+      official_tag: ${{ steps.metadata.outputs.official_tag }}
+      sha: ${{ steps.metadata.outputs.sha }}
+      tag: ${{ steps.metadata.outputs.tag }}
+      version: ${{ steps.metadata.outputs.version }}
     steps:
-      - name: Checkout downstream main
+      - name: Checkout Coda main
         uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-            !/.claude/worktrees/
-          sparse-checkout-cone-mode: false
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-
-      - name: Hydrate complete Git history
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch --refetch --no-filter --no-tags origin \
-            '+refs/heads/*:refs/remotes/origin/*' \
-            '+refs/tags/*:refs/tags/*'
-          git rev-list --objects --all --missing=print > "$RUNNER_TEMP/reachable-objects.txt"
-          if grep -q '^?' "$RUNNER_TEMP/reachable-objects.txt"; then
-            echo "The downstream repository still has promised Git objects after a full refetch." >&2
-            exit 1
-          fi
-
-      - id: checkout_state
-        name: Record downstream head
-        shell: bash
-        run: echo "old_head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - id: official
-        name: Read official release and main metadata
+      - id: metadata
+        name: Validate release metadata
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          repository="$(jq -r .repository .coda-upstream/upstream.json)"
-          branch="$(jq -r .branch .coda-upstream/upstream.json)"
-          gh api "repos/$repository/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
-          node scripts/downstream-sync.ts latest \
-            --releases "$RUNNER_TEMP/releases.json" > "$RUNNER_TEMP/latest.json"
-          tag="$(jq -r .tag "$RUNNER_TEMP/latest.json")"
-          gh api "repos/$repository/commits/$branch" > "$RUNNER_TEMP/main.json"
-          gh api "repos/$repository/compare/$tag...$branch" > "$RUNNER_TEMP/compare.json"
-          echo "repository=$repository" >> "$GITHUB_OUTPUT"
-          echo "branch=$branch" >> "$GITHUB_OUTPUT"
-
-      - id: resolve
-        name: Resolve candidate version
-        shell: bash
-        env:
-          FORCE_BUILD: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
-        run: |
-          set -euo pipefail
-          args=(
-            resolve
-            --releases "$RUNNER_TEMP/releases.json"
-            --state .coda-upstream/upstream.json
-            --main "$RUNNER_TEMP/main.json"
-            --compare "$RUNNER_TEMP/compare.json"
-            --run-number "$GITHUB_RUN_NUMBER"
-            --github-output
-          )
-          if [[ "$FORCE_BUILD" == "true" ]]; then
-            args+=(--force)
-          fi
-          node scripts/downstream-sync.ts "${args[@]}"
-
-      - id: rebase
-        name: Rebase customizations in isolation
-        if: steps.resolve.outputs.has_update == 'true'
-        shell: bash
-        env:
-          UPSTREAM_REPOSITORY: ${{ steps.official.outputs.repository }}
-          UPSTREAM_BRANCH: ${{ steps.official.outputs.branch }}
-          OFFICIAL_TAG: ${{ steps.resolve.outputs.official_tag }}
-          OFFICIAL_MAIN_SHA: ${{ steps.resolve.outputs.source_sha }}
-          OFFICIAL_NIGHTLY_SHA: ${{ steps.resolve.outputs.nightly_sha }}
-          OLD_MAIN_SHA: ${{ steps.resolve.outputs.old_main_sha }}
-          OLD_HEAD: ${{ steps.checkout_state.outputs.old_head }}
-          RELEASE_VERSION: ${{ steps.resolve.outputs.version }}
-        run: |
-          set -euo pipefail
-          git remote add official "https://github.com/$UPSTREAM_REPOSITORY.git"
-          git fetch --no-tags official \
-            "+refs/heads/$UPSTREAM_BRANCH:refs/coda/official-main" \
-            "+refs/tags/$OFFICIAL_TAG:refs/coda/official-nightly"
-
-          test "$(git rev-parse refs/coda/official-main)" = "$OFFICIAL_MAIN_SHA"
-          test "$(git rev-parse 'refs/coda/official-nightly^{commit}')" = "$OFFICIAL_NIGHTLY_SHA"
-          git merge-base --is-ancestor "$OLD_MAIN_SHA" "$OLD_HEAD"
-          git merge-base --is-ancestor "$OLD_MAIN_SHA" "$OFFICIAL_MAIN_SHA"
-          git merge-base --is-ancestor "$OFFICIAL_NIGHTLY_SHA" "$OFFICIAL_MAIN_SHA"
-
-          git diff --name-only "$OLD_MAIN_SHA" "$OFFICIAL_MAIN_SHA" > "$RUNNER_TEMP/upstream-paths.txt"
-          git diff --name-only "$OLD_MAIN_SHA" "$OLD_HEAD" > "$RUNNER_TEMP/customization-paths.txt"
-
-          candidate_dir="$RUNNER_TEMP/coda-candidate"
-          git worktree add --detach "$candidate_dir" "$OLD_HEAD"
-          git -C "$candidate_dir" config user.name "Coda upstream sync"
-          git -C "$candidate_dir" config user.email "actions@users.noreply.github.com"
-
-          if [[ "$OLD_MAIN_SHA" != "$OFFICIAL_MAIN_SHA" ]]; then
-            if ! git -C "$candidate_dir" rebase \
-              --onto "$OFFICIAL_MAIN_SHA" "$OLD_MAIN_SHA" "$OLD_HEAD" \
-              2> "$RUNNER_TEMP/rebase-error.txt"; then
-              git -C "$candidate_dir" diff --name-only --diff-filter=U \
-                > "$RUNNER_TEMP/unmerged-paths.txt"
-              node scripts/downstream-sync.ts report \
-                --old-sha "$OLD_MAIN_SHA" \
-                --new-tag "$OFFICIAL_TAG" \
-                --new-sha "$OFFICIAL_MAIN_SHA" \
-                --upstream-paths "$RUNNER_TEMP/upstream-paths.txt" \
-                --customization-paths "$RUNNER_TEMP/customization-paths.txt" \
-                --unmerged-paths "$RUNNER_TEMP/unmerged-paths.txt" \
-                --rebase-error "$RUNNER_TEMP/rebase-error.txt" \
-                --output "$RUNNER_TEMP/upstream-sync-conflict.md"
-              git -C "$candidate_dir" rebase --abort || true
-              echo "conflicted=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-          fi
-
-          jq -n \
-            --arg repository "$UPSTREAM_REPOSITORY" \
-            --arg branch "$UPSTREAM_BRANCH" \
-            --arg mainSha "$OFFICIAL_MAIN_SHA" \
-            --arg nightlyTag "$OFFICIAL_TAG" \
-            --arg nightlySha "$OFFICIAL_NIGHTLY_SHA" \
-            --arg version "$RELEASE_VERSION" \
-            '{repository: $repository, branch: $branch, mainSha: $mainSha, nightlyTag: $nightlyTag, nightlySha: $nightlySha, version: $version}' \
-            > "$candidate_dir/.coda-upstream/upstream.json"
-          git -C "$candidate_dir" add .coda-upstream/upstream.json
-          git -C "$candidate_dir" commit -m "chore(release): prepare $RELEASE_VERSION"
-
-          candidate_sha="$(git -C "$candidate_dir" rev-parse HEAD)"
-          git update-ref refs/coda/candidate "$candidate_sha"
-          git bundle create "$RUNNER_TEMP/candidate.bundle" refs/coda/candidate "^$OLD_HEAD"
-          git bundle verify "$RUNNER_TEMP/candidate.bundle"
-          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
-          echo "conflicted=false" >> "$GITHUB_OUTPUT"
-
-      - name: Upload conflict report
-        if: steps.rebase.outputs.conflicted == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: upstream-sync-conflict
-          path: ${{ runner.temp }}/upstream-sync-conflict.md
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Open or refresh conflict issue
-        if: steps.rebase.outputs.conflicted == 'true'
-        continue-on-error: true
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          title="[automation] Upstream sync conflict"
-          number="$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
-          if [[ -n "$number" ]]; then
-            gh issue edit "$number" --title "$title" --body-file "$RUNNER_TEMP/upstream-sync-conflict.md"
+          version="$(jq -er .version .coda-upstream/upstream.json)"
+          official_tag="$(jq -er .nightlyTag .coda-upstream/upstream.json)"
+          source_sha="$(git rev-parse HEAD)"
+          tag="v$version"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+\.coda\.[0-9]+\.[0-9]+$ ]]
+          [[ "$official_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$ ]]
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "official_tag=$official_tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
           else
-            gh issue create --title "$title" --body-file "$RUNNER_TEMP/upstream-sync-conflict.md"
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Fail conflicted sync
-        if: steps.rebase.outputs.conflicted == 'true'
-        run: exit 1
-
-      - name: Upload candidate source
-        if: steps.resolve.outputs.has_update == 'true' && steps.rebase.outputs.conflicted == 'false'
-        uses: actions/upload-artifact@v7
-        with:
-          name: downstream-candidate
-          path: ${{ runner.temp }}/candidate.bundle
-          if-no-files-found: error
-          retention-days: 3
-
-  validate_candidate:
-    name: Validate candidate
-    needs: sync_source
-    if: needs.sync_source.outputs.has_update == 'true' && needs.sync_source.outputs.conflicted == 'false'
+  validate:
+    name: Validate release source
+    needs: source
+    if: needs.source.outputs.already_published == 'false'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - name: Checkout downstream main
+      - name: Checkout release source
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          ref: ${{ needs.source.outputs.sha }}
           sparse-checkout: |
             /*
             !/.repos/
             !/.claude/worktrees/
           sparse-checkout-cone-mode: false
-
-      - name: Download candidate source
-        uses: actions/download-artifact@v8
-        with:
-          name: downstream-candidate
-          path: ${{ runner.temp }}/candidate
-
-      - name: Checkout candidate source
-        shell: bash
-        env:
-          EXPECTED_SHA: ${{ needs.sync_source.outputs.candidate_sha }}
-        run: |
-          set -euo pipefail
-          git fetch "$RUNNER_TEMP/candidate/candidate.bundle" refs/coda/candidate
-          git checkout --detach FETCH_HEAD
-          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
@@ -270,20 +90,17 @@ jobs:
       - name: Ensure Electron runtime is installed
         run: vp run --filter @t3tools/desktop ensure:electron
 
-      - name: Run focused tests
+      - name: Run focused release tests
         run: |
-          (cd scripts && vp test run \
-            downstream-sync.test.ts \
-            build-desktop-artifact.test.ts)
+          (cd scripts && vp test run downstream-sync.test.ts build-desktop-artifact.test.ts)
           (cd apps/desktop && vp test run --passWithNoTests \
             src/app/DesktopEnvironment.test.ts \
             src/updates/DesktopUpdates.test.ts)
           (cd apps/web && vp test run --passWithNoTests --project unit \
             src/branding.test.ts \
-            src/components/desktopUpdate.logic.test.ts \
-            src/components/desktopUpdate.toast.test.tsx)
+            src/components/desktopUpdate.logic.test.ts)
 
-      - name: Typecheck desktop update surfaces
+      - name: Typecheck desktop surfaces
         run: |
           vp run --filter @t3tools/contracts typecheck
           vp run --filter @t3tools/desktop typecheck
@@ -291,36 +108,20 @@ jobs:
 
   build_wsl_node_pty:
     name: Build WSL node-pty
-    needs: [sync_source, validate_candidate]
-    if: needs.sync_source.outputs.has_update == 'true' && needs.sync_source.outputs.conflicted == 'false'
+    needs: [source, validate]
+    if: needs.source.outputs.already_published == 'false' && needs.validate.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - name: Checkout downstream main
+      - name: Checkout release source
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          ref: ${{ needs.source.outputs.sha }}
           sparse-checkout: |
             /*
             !/.repos/
             !/.claude/worktrees/
           sparse-checkout-cone-mode: false
-
-      - name: Download candidate source
-        uses: actions/download-artifact@v8
-        with:
-          name: downstream-candidate
-          path: ${{ runner.temp }}/candidate
-
-      - name: Checkout candidate source
-        shell: bash
-        env:
-          EXPECTED_SHA: ${{ needs.sync_source.outputs.candidate_sha }}
-        run: |
-          set -euo pipefail
-          git fetch "$RUNNER_TEMP/candidate/candidate.bundle" refs/coda/candidate
-          git checkout --detach FETCH_HEAD
-          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
@@ -348,11 +149,12 @@ jobs:
           name: wsl-node-pty-x64
           path: wsl-prebuild/pty.node
           if-no-files-found: error
+          retention-days: 3
 
   build_desktop:
     name: Build ${{ matrix.label }}
-    needs: [sync_source, build_wsl_node_pty]
-    if: needs.sync_source.outputs.has_update == 'true' && needs.sync_source.outputs.conflicted == 'false'
+    needs: [source, build_wsl_node_pty]
+    if: needs.source.outputs.already_published == 'false' && needs.build_wsl_node_pty.result == 'success'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
@@ -372,31 +174,15 @@ jobs:
             arch: x64
             rust_target: x86_64-pc-windows-msvc
     steps:
-      - name: Checkout downstream main
+      - name: Checkout release source
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          ref: ${{ needs.source.outputs.sha }}
           sparse-checkout: |
             /*
             !/.repos/
             !/.claude/worktrees/
           sparse-checkout-cone-mode: false
-
-      - name: Download candidate source
-        uses: actions/download-artifact@v8
-        with:
-          name: downstream-candidate
-          path: ${{ runner.temp }}/candidate
-
-      - name: Checkout candidate source
-        shell: bash
-        env:
-          EXPECTED_SHA: ${{ needs.sync_source.outputs.candidate_sha }}
-        run: |
-          set -euo pipefail
-          git fetch "$RUNNER_TEMP/candidate/candidate.bundle" refs/coda/candidate
-          git checkout --detach FETCH_HEAD
-          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
@@ -441,7 +227,7 @@ jobs:
       - name: Align package versions
         shell: bash
         env:
-          OFFICIAL_TAG: ${{ needs.sync_source.outputs.official_tag }}
+          OFFICIAL_TAG: ${{ needs.source.outputs.official_tag }}
         run: node scripts/update-release-package-versions.ts "${OFFICIAL_TAG#v}"
 
       - name: Build unsigned desktop artifact
@@ -454,7 +240,7 @@ jobs:
             --platform "${{ matrix.platform }}"
             --target "${{ matrix.target }}"
             --arch "${{ matrix.arch }}"
-            --build-version "${{ needs.sync_source.outputs.version }}"
+            --build-version "${{ needs.source.outputs.version }}"
             --verbose
           )
           if [[ "${{ matrix.platform }}" == "win" ]]; then
@@ -490,32 +276,14 @@ jobs:
           retention-days: 3
 
   publish:
-    name: Publish release and advance main
-    needs: [sync_source, build_desktop]
-    if: needs.sync_source.outputs.has_update == 'true' && needs.sync_source.outputs.conflicted == 'false' && needs.build_desktop.result == 'success'
+    name: Publish desktop release
+    needs: [source, build_desktop]
+    if: needs.source.outputs.already_published == 'false' && needs.build_desktop.result == 'success'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     permissions:
       contents: write
-      issues: write
     steps:
-      - name: Checkout downstream main
-        uses: actions/checkout@v6
-        with:
-          ref: main
-          fetch-depth: 0
-          sparse-checkout: |
-            /*
-            !/.repos/
-            !/.claude/worktrees/
-          sparse-checkout-cone-mode: false
-
-      - name: Download candidate source
-        uses: actions/download-artifact@v8
-        with:
-          name: downstream-candidate
-          path: ${{ runner.temp }}/candidate
-
       - name: Download desktop assets
         uses: actions/download-artifact@v8
         with:
@@ -523,60 +291,23 @@ jobs:
           path: ${{ runner.temp }}/release-assets
           merge-multiple: true
 
-      - name: Verify candidate and assets
+      - name: Verify and publish release
         shell: bash
         env:
-          EXPECTED_SHA: ${{ needs.sync_source.outputs.candidate_sha }}
+          GH_TOKEN: ${{ github.token }}
+          OFFICIAL_TAG: ${{ needs.source.outputs.official_tag }}
+          RELEASE_SHA: ${{ needs.source.outputs.sha }}
+          RELEASE_TAG: ${{ needs.source.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.source.outputs.version }}
         run: |
           set -euo pipefail
-          git fetch "$RUNNER_TEMP/candidate/candidate.bundle" refs/coda/candidate
-          test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_SHA"
           test -f "$RUNNER_TEMP/release-assets/nightly.yml"
           test -f "$RUNNER_TEMP/release-assets/nightly-mac.yml"
           compgen -G "$RUNNER_TEMP/release-assets/*.exe" >/dev/null
           compgen -G "$RUNNER_TEMP/release-assets/*.dmg" >/dev/null
-
-      - name: Publish GitHub prerelease
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CANDIDATE_SHA: ${{ needs.sync_source.outputs.candidate_sha }}
-          RELEASE_TAG: ${{ needs.sync_source.outputs.tag }}
-          RELEASE_VERSION: ${{ needs.sync_source.outputs.version }}
-          OFFICIAL_TAG: ${{ needs.sync_source.outputs.official_tag }}
-        run: |
-          set -euo pipefail
-          staging_branch="automation/coda-release-$GITHUB_RUN_ID"
-          cleanup() {
-            git push origin --delete "$staging_branch" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-
-          git push origin "$CANDIDATE_SHA:refs/heads/$staging_branch"
-          notes="Automated Coda desktop snapshot rebased through official $OFFICIAL_TAG. macOS arm64 and Windows x64 builds are unsigned."
+          notes="Coda desktop release synced through official $OFFICIAL_TAG. macOS arm64 and Windows x64 builds are unsigned."
           gh release create "$RELEASE_TAG" "$RUNNER_TEMP"/release-assets/* \
-            --target "$staging_branch" \
+            --target "$RELEASE_SHA" \
             --title "Coda $RELEASE_VERSION" \
             --notes "$notes" \
             --prerelease
-
-      - name: Advance downstream main
-        shell: bash
-        env:
-          CANDIDATE_SHA: ${{ needs.sync_source.outputs.candidate_sha }}
-          OLD_HEAD: ${{ needs.sync_source.outputs.old_head }}
-        run: |
-          set -euo pipefail
-          git push origin "$CANDIDATE_SHA:refs/heads/main" \
-            --force-with-lease="refs/heads/main:$OLD_HEAD"
-
-      - name: Close resolved conflict issue
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          title="[automation] Upstream sync conflict"
-          number="$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
-          if [[ -n "$number" ]]; then
-            gh issue close "$number" --comment "Resolved by successful release ${{ needs.sync_source.outputs.tag }}."
-          fi

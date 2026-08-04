@@ -27,6 +27,11 @@ export interface NightlyRelease {
   readonly publishedAt: string;
 }
 
+export interface UpstreamCommit {
+  readonly sha: string;
+  readonly subject: string;
+}
+
 const OFFICIAL_NIGHTLY_TAG = /^v(\d+\.\d+\.\d+-nightly\.\d{8}\.\d+)$/u;
 const CODA_NIGHTLY_VERSION = /^\d+\.\d+\.\d+-nightly\.\d{8}\.\d+\.coda\.\d+\.\d+$/u;
 
@@ -229,6 +234,60 @@ export function renderCollisionReport(input: {
   ].join("\n");
 }
 
+function escapeMarkdown(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("[", "\\[").replaceAll("]", "\\]");
+}
+
+export function renderSyncProposal(input: {
+  readonly repository: string;
+  readonly oldSha: string;
+  readonly newSha: string;
+  readonly newTag: string;
+  readonly commits: ReadonlyArray<UpstreamCommit>;
+  readonly workflowRunUrl: string;
+}): string {
+  const groups = {
+    Features: input.commits.filter(({ subject }) => /^feat(?:\([^)]*\))?!?:/u.test(subject)),
+    Fixes: input.commits.filter(({ subject }) => /^fix(?:\([^)]*\))?!?:/u.test(subject)),
+    "Other changes": input.commits.filter(
+      ({ subject }) => !/^(?:feat|fix)(?:\([^)]*\))?!?:/u.test(subject),
+    ),
+  };
+  const section = (title: string, commits: ReadonlyArray<UpstreamCommit>) => {
+    if (commits.length === 0) return `### ${title}\n\nNone.\n`;
+    return [
+      `### ${title}`,
+      "",
+      ...commits.map(({ sha, subject }) => {
+        const shortSha = sha.slice(0, 8);
+        const url = `https://github.com/${input.repository}/commit/${sha}`;
+        return `- ${escapeMarkdown(subject)} ([\`${shortSha}\`](${url}))`;
+      }),
+      "",
+    ].join("\n");
+  };
+
+  return [
+    "## Upstream sync",
+    "",
+    `Merges [${input.newTag} and upstream main changes](https://github.com/${input.repository}/compare/${input.oldSha}...${input.newSha}) into Coda.`,
+    "",
+    `- Previous upstream main: \`${input.oldSha}\``,
+    `- Candidate upstream main: \`${input.newSha}\``,
+    `- Validation run: ${input.workflowRunUrl}`,
+    "",
+    section("Features", groups.Features),
+    section("Fixes", groups.Fixes),
+    section("Other changes", groups["Other changes"]),
+    "**Merge this PR with a merge commit. Do not squash or rebase it:** the upstream parent is retained so future syncs have the correct Git merge base.",
+    "",
+    "After this PR is merged, the desktop release workflow builds unsigned macOS arm64 and Windows x64 downloads.",
+    "",
+    "_Generated deterministically from upstream Git history; no AI summary was used._",
+    "",
+  ].join("\n");
+}
+
 function readJson(path: string): unknown {
   return JSON.parse(NodeFS.readFileSync(path, "utf8"));
 }
@@ -239,6 +298,22 @@ function readPathList(path: string | undefined): ReadonlyArray<string> {
     .split(/\r?\n/u)
     .map((value) => value.trim())
     .filter(Boolean);
+}
+
+function readCommitList(path: string): ReadonlyArray<UpstreamCommit> {
+  return NodeFS.readFileSync(path, "utf8")
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .map((line) => {
+      const separator = line.indexOf("\t");
+      if (separator < 1) throw new Error("Commit list entries must be SHA-tab-subject.");
+      const sha = line.slice(0, separator);
+      const subject = line.slice(separator + 1).trim();
+      if (!/^[0-9a-f]{40}$/u.test(sha) || !subject) {
+        throw new Error("Commit list contains an invalid entry.");
+      }
+      return { sha, subject };
+    });
 }
 
 function appendGitHubOutput(values: Readonly<Record<string, string>>): void {
@@ -340,6 +415,31 @@ function runReport(values: Record<string, string | boolean | undefined>): void {
   NodeFS.writeFileSync(outputPath, report);
 }
 
+function runProposal(values: Record<string, string | boolean | undefined>): void {
+  for (const name of [
+    "repository",
+    "old-sha",
+    "new-sha",
+    "new-tag",
+    "commits",
+    "workflow-run-url",
+    "output",
+  ] as const) {
+    if (typeof values[name] !== "string") throw new Error(`proposal requires --${name}.`);
+  }
+  const proposal = renderSyncProposal({
+    repository: values.repository as string,
+    oldSha: values["old-sha"] as string,
+    newSha: values["new-sha"] as string,
+    newTag: values["new-tag"] as string,
+    commits: readCommitList(values.commits as string),
+    workflowRunUrl: values["workflow-run-url"] as string,
+  });
+  const outputPath = values.output as string;
+  NodeFS.mkdirSync(NodePath.dirname(NodePath.resolve(outputPath)), { recursive: true });
+  NodeFS.writeFileSync(outputPath, proposal);
+}
+
 const isMain =
   process.argv[1] && NodePath.resolve(process.argv[1]) === NodePath.resolve(import.meta.filename);
 if (isMain) {
@@ -356,8 +456,11 @@ if (isMain) {
       "github-output": { type: "boolean" },
       output: { type: "string" },
       "old-sha": { type: "string" },
-      "new-tag": { type: "string" },
       "new-sha": { type: "string" },
+      "new-tag": { type: "string" },
+      repository: { type: "string" },
+      commits: { type: "string" },
+      "workflow-run-url": { type: "string" },
       "upstream-paths": { type: "string" },
       "customization-paths": { type: "string" },
       "unmerged-paths": { type: "string" },
@@ -368,5 +471,6 @@ if (isMain) {
   if (command === "latest") runLatest(values);
   else if (command === "resolve") runResolve(values);
   else if (command === "report") runReport(values);
-  else throw new Error("Expected command 'latest', 'resolve', or 'report'.");
+  else if (command === "proposal") runProposal(values);
+  else throw new Error("Expected command 'latest', 'resolve', 'report', or 'proposal'.");
 }
