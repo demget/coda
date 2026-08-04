@@ -123,7 +123,9 @@ describe("compressImageForStash", () => {
   });
 
   it("reports too-large when even the smallest encoding overflows the budget", async () => {
-    const { close } = stubCanvasPipeline(() => 8_000_000);
+    // Just over the 1.3M-character data URL budget without making every
+    // quality/scale attempt allocate an unnecessarily large test payload.
+    const { close } = stubCanvasPipeline(() => 1_000_000);
 
     const result = await compressImageForStash(makeFile(9_000_000));
 

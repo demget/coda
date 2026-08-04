@@ -545,7 +545,7 @@ describe("MessagesTimeline", () => {
             },
           },
         ]}
-        workspaceRoot="C:/Users/mike/dev-stuff/t3code"
+        workspaceRoot="C:/Users/mike/dev-stuff/coda"
       />,
     );
 
