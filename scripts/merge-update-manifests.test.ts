@@ -56,12 +56,7 @@ releaseDate: '2026-03-07T10:36:07.540Z'
     assert.equal(merged.releaseDate, "2026-03-07T10:36:07.540Z");
     assert.deepStrictEqual(
       merged.files.map((file) => file.url),
-      [
-        "Coda-0.0.4-arm64.zip",
-        "Coda-0.0.4-arm64.dmg",
-        "Coda-0.0.4-x64.zip",
-        "Coda-0.0.4-x64.dmg",
-      ],
+      ["Coda-0.0.4-arm64.zip", "Coda-0.0.4-arm64.dmg", "Coda-0.0.4-x64.zip", "Coda-0.0.4-x64.dmg"],
     );
 
     const serialized = serializePlatformUpdateManifest("mac", merged);

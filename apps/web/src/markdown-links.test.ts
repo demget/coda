@@ -95,8 +95,7 @@ describe("resolveMarkdownFileLinkTarget", () => {
         "C:/Users/mike/dev-stuff/t3code",
       ),
     ).toMatchObject({
-      displayPath:
-        "coda/apps/web/src/components/chat/MessagesTimeline.virtualization.browser.tsx",
+      displayPath: "coda/apps/web/src/components/chat/MessagesTimeline.virtualization.browser.tsx",
       workspaceRelativePath:
         "apps/web/src/components/chat/MessagesTimeline.virtualization.browser.tsx",
     });

@@ -9,15 +9,15 @@ Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, and Ope
 > package registry — you run it from this checkout. It keeps its own identity everywhere it
 > touches your machine, so it can run side by side with an installed T3 Code:
 >
-> | | T3 Code | Coda |
-> | --- | --- | --- |
-> | Data directory | `~/.t3` | `~/.coda` |
-> | Environment variables | `T3CODE_*` | `CODA_*` |
-> | Desktop bundle ID | `com.t3tools.t3code` | `com.coda.app` |
-> | Deep-link scheme | `t3code://` | `coda://` |
-> | Checkpoint git refs | `refs/t3/checkpoints` | `refs/coda/checkpoints` |
-> | Worktree branch prefix | `t3code/` | `coda/` |
-> | CLI binary | `t3` | `coda` |
+> |                        | T3 Code               | Coda                    |
+> | ---------------------- | --------------------- | ----------------------- |
+> | Data directory         | `~/.t3`               | `~/.coda`               |
+> | Environment variables  | `T3CODE_*`            | `CODA_*`                |
+> | Desktop bundle ID      | `com.t3tools.t3code`  | `com.coda.app`          |
+> | Deep-link scheme       | `t3code://`           | `coda://`               |
+> | Checkpoint git refs    | `refs/t3/checkpoints` | `refs/coda/checkpoints` |
+> | Worktree branch prefix | `t3code/`             | `coda/`                 |
+> | CLI binary             | `t3`                  | `coda`                  |
 
 ## Running it
 

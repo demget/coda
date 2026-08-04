@@ -66,6 +66,10 @@ interface IconVariant {
   readonly outputs: VariantOutputs;
 }
 
+function iconVariantRenderSource(variant: IconVariant): string {
+  return variant.rasterSource ?? variant.source;
+}
+
 interface IconComposerTool {
   readonly path: string;
   readonly version: string;
@@ -892,9 +896,7 @@ export const exportBrandIcons = Effect.fn("exportBrandIcons")(function* (checkOn
 
   const generated = new Map<string, Buffer>();
   for (const variant of ICON_VARIANTS) {
-    yield* Console.log(
-      `Rendering ${variant.label} from ${variant.rasterSource ?? variant.source}...`,
-    );
+    yield* Console.log(`Rendering ${variant.label} from ${iconVariantRenderSource(variant)}...`);
     const variantAssets = yield* renderVariant(
       tool?.path ?? null,
       repositoryRoot,

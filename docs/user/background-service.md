@@ -31,7 +31,7 @@ npx coda@latest service uninstall
 
 Updating restarts Coda briefly. Let active agent work and terminal commands finish first.
 
-The systemd unit runs a small stable launcher. Exact T3 Code versions are installed separately, so
+The systemd unit runs a small stable launcher. Exact Coda versions are installed separately, so
 a failed remote candidate can return to the previous version without rewriting the unit. Releases
 that change the database must be installed with the local `service update` command above.
 

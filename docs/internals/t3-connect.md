@@ -74,7 +74,7 @@ In **Clerk Dashboard > OAuth applications**:
 2. Enable the **Public** option so authorization-code exchange uses PKCE.
 3. Add **both** allowed redirect URIs:
    - `http://127.0.0.1:34338/callback` for the loopback listener;
-   - `https://app.t3.codes/connect/callback` for the hosted out-of-band flow. This is
+   - `https://app.coda.codes/connect/callback` for the hosted out-of-band flow. This is
      `connectCallbackUrl(DEFAULT_HOSTED_APP_URL)` from `packages/shared/src/connectAuth.ts`, so a
      custom `CODA_HOSTED_APP_URL` means `$CODA_HOSTED_APP_URL/connect/callback` instead.
      Omitting it breaks headless and SSH authorization.
@@ -89,13 +89,13 @@ handshake; it only validates the issued Clerk bearer token when the CLI manages 
 The connect command group is:
 
 ```sh
-t3 connect            # default: onboarding
-t3 connect login
-t3 connect link       # --publish-only
-t3 connect status     # --json
-t3 connect publish    # --disable
-t3 connect unlink
-t3 connect logout
+coda connect            # default: onboarding
+coda connect login
+coda connect link       # --publish-only
+coda connect status     # --json
+coda connect publish    # --disable
+coda connect unlink
+coda connect logout
 ```
 
 `coda serve` is a separate top-level command, not a connect subcommand.
