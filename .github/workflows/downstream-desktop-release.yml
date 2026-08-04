@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - .coda-upstream/upstream.json
+      - .github/workflows/downstream-desktop-release.yml
   workflow_dispatch:
 
 concurrency:
@@ -307,6 +308,7 @@ jobs:
           compgen -G "$RUNNER_TEMP/release-assets/*.dmg" >/dev/null
           notes="Coda desktop release synced through official $OFFICIAL_TAG. macOS arm64 and Windows x64 builds are unsigned."
           gh release create "$RELEASE_TAG" "$RUNNER_TEMP"/release-assets/* \
+            --repo "$GITHUB_REPOSITORY" \
             --target "$RELEASE_SHA" \
             --title "Coda $RELEASE_VERSION" \
             --notes "$notes" \
