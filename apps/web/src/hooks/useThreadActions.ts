@@ -4,7 +4,11 @@ import {
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { canSettle, canSnooze } from "@t3tools/client-runtime/state/thread-settled";
+import {
+  canSettle,
+  canSnooze,
+  reconcileSettleLifecycle,
+} from "@t3tools/client-runtime/state/thread-settled";
 import { EnvironmentId, type ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
@@ -25,6 +29,7 @@ import {
   readEnvironmentSupportsSnooze,
   readEnvironmentThreadRefs,
   readProject,
+  readThreadDetail,
   readThreadShell,
 } from "../state/entities";
 import { useTerminalUiStateStore } from "../terminalUiStateStore";
@@ -427,15 +432,26 @@ export function useThreadActions() {
         );
       }
       const resolved = resolveThreadTarget(target);
+      const currentRouteThreadRef = getCurrentRouteThreadRef();
+      const currentThreadDetail =
+        currentRouteThreadRef?.environmentId === target.environmentId &&
+        currentRouteThreadRef.threadId === target.threadId
+          ? readThreadDetail(target)
+          : null;
+      const validationThread = resolved
+        ? reconcileSettleLifecycle(resolved.thread, currentThreadDetail)
+        : null;
       // Settle may only target what effectiveSettled could classify as
       // settled: not starting/running sessions, not threads waiting on
-      // approvals or user input. Anything else would hide live work.
-      if (resolved && !canSettle(resolved.thread, { now: new Date().toISOString() })) {
+      // approvals or user input. The open detail stream can be one lifecycle
+      // event ahead of the sidebar shell, so reconcile a newer session before
+      // rejecting locally; the server still enforces the same invariants.
+      if (validationThread && !canSettle(validationThread, { now: new Date().toISOString() })) {
         return AsyncResult.failure(
           Cause.fail(
             new ThreadSettleBlockedError({
-              environmentId: resolved.threadRef.environmentId,
-              threadId: resolved.threadRef.threadId,
+              environmentId: target.environmentId,
+              threadId: target.threadId,
             }),
           ),
         );
@@ -447,7 +463,7 @@ export function useThreadActions() {
         input: { threadId: target.threadId },
       });
     },
-    [resolveThreadTarget, settleThreadMutation],
+    [getCurrentRouteThreadRef, resolveThreadTarget, settleThreadMutation],
   );
 
   const unsettleThread = useCallback(

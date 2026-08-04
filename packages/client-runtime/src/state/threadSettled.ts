@@ -1,5 +1,5 @@
 // @effect-diagnostics globalDate:off -- UI snooze presets use local calendar boundaries and Intl labels.
-import type { OrchestrationThreadShell } from "@t3tools/contracts";
+import type { OrchestrationThread, OrchestrationThreadShell } from "@t3tools/contracts";
 
 export type ChangeRequestStateLike = "open" | "closed" | "merged";
 
@@ -89,6 +89,39 @@ export function canSettle(
   // (or auto-settling it on a closed PR) would hide a just-requested turn.
   if (hasQueuedTurnStart(shell, options)) return false;
   return true;
+}
+
+/**
+ * Reconcile the shell used by settle validation with a newer lifecycle state
+ * from the open thread's detail stream. Shell and detail subscriptions advance
+ * independently, so the chat can receive a turn completion before the sidebar
+ * shell receives the matching ready session. In that gap, validating only the
+ * shell falsely rejects settle without ever asking the authoritative server.
+ *
+ * Only session-timestamped lifecycle fields are reconciled. The shell remains
+ * authoritative for pending requests and queued user messages, and a stale
+ * detail session can never overrule a newer live shell session.
+ */
+export function reconcileSettleLifecycle(
+  shell: OrchestrationThreadShell,
+  detail: Pick<OrchestrationThread, "id" | "session" | "latestTurn"> | null,
+): OrchestrationThreadShell {
+  if (detail === null || detail.id !== shell.id || detail.session === null) {
+    return shell;
+  }
+
+  const shellSessionUpdatedAt =
+    shell.session === null ? Number.NEGATIVE_INFINITY : Date.parse(shell.session.updatedAt);
+  const detailSessionUpdatedAt = Date.parse(detail.session.updatedAt);
+  if (Number.isNaN(detailSessionUpdatedAt) || detailSessionUpdatedAt <= shellSessionUpdatedAt) {
+    return shell;
+  }
+
+  return {
+    ...shell,
+    session: detail.session,
+    latestTurn: detail.latestTurn,
+  };
 }
 
 /**

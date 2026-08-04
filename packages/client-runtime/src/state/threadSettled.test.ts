@@ -11,6 +11,7 @@ import {
   canSettle,
   effectiveSettled,
   hasQueuedTurnStart,
+  reconcileSettleLifecycle,
   threadLastActivityAt,
   type ChangeRequestStateLike,
 } from "./threadSettled.ts";
@@ -433,5 +434,48 @@ describe("canSettle", () => {
     });
     expect(canSettle(blocked, { now: NOW })).toBe(false);
     expect(effectiveSettled(blocked, { now: NOW, autoSettleAfterDays: 3 })).toBe(false);
+  });
+});
+
+describe("reconcileSettleLifecycle", () => {
+  it("uses a newer completed detail lifecycle when the shell still says Kimi is running", () => {
+    const shell = makeShell({ activityAt: FRESH, sessionStatus: "running" });
+    const completedAt = "2026-04-10T00:00:01.000Z";
+    const reconciled = reconcileSettleLifecycle(shell, {
+      id: shell.id,
+      session: {
+        ...shell.session!,
+        status: "ready",
+        activeTurnId: null,
+        providerName: "kimi",
+        updatedAt: completedAt,
+      },
+      latestTurn: {
+        ...shell.latestTurn!,
+        state: "completed",
+        completedAt,
+      },
+    });
+
+    expect(reconciled.session?.status).toBe("ready");
+    expect(canSettle(reconciled, { now: NOW })).toBe(true);
+  });
+
+  it("keeps a newer running shell authoritative over stale completed detail", () => {
+    const shell = makeShell({ activityAt: FRESH, sessionStatus: "running" });
+    const reconciled = reconcileSettleLifecycle(shell, {
+      id: shell.id,
+      session: {
+        ...shell.session!,
+        status: "ready",
+        activeTurnId: null,
+        providerName: "kimi",
+        updatedAt: "2026-04-09T23:59:59.000Z",
+      },
+      latestTurn: shell.latestTurn,
+    });
+
+    expect(reconciled).toBe(shell);
+    expect(canSettle(reconciled, { now: NOW })).toBe(false);
   });
 });
