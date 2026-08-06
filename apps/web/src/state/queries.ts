@@ -14,6 +14,8 @@ import type {
   OrchestrationThread,
   ProjectContentMatch,
   ProjectEntryKind,
+  ProviderInstanceId,
+  ServerProviderSkill,
   ThreadId,
   VcsListRefsResult,
   VcsRef,
@@ -28,6 +30,7 @@ import { orchestrationEnvironment } from "./orchestration";
 import { isPaginatedBranchesNextPagePending } from "./paginatedBranches";
 import { projectContentSearch, projectEnvironment } from "./projects";
 import { useEnvironmentQuery } from "./query";
+import { serverEnvironment } from "./server";
 import { useEnvironmentThread } from "./threads";
 import { vcsEnvironment } from "./vcs";
 
@@ -295,6 +298,40 @@ export function useProjectPathSearch(
 
 export function useComposerPathSearch(target: ComposerPathSearchTarget) {
   return useProjectPathSearch(target, COMPOSER_PATH_SEARCH_LIMIT);
+}
+
+export interface ProviderSkillsTarget {
+  readonly environmentId: EnvironmentId | null;
+  readonly instanceId: ProviderInstanceId | null;
+  /**
+   * Workspace the skills are resolved against — a thread's worktree when it
+   * has one, otherwise the project root.
+   */
+  readonly cwd: string | null;
+}
+
+/**
+ * Skills the given provider instance would load in the given workspace.
+ *
+ * `ServerProvider.skills` cannot answer this. One snapshot is shared by every
+ * project, so the server discovers it against its own cwd and project-scoped
+ * skills (`<cwd>/.claude/skills`, `<cwd>/.agents/skills`) never appear for any
+ * other project. Falls back to `fallbackSkills` — the snapshot list — while
+ * the query is in flight, so the picker is never briefly empty.
+ */
+export function useProviderSkills(
+  target: ProviderSkillsTarget,
+  fallbackSkills: ReadonlyArray<ServerProviderSkill>,
+): ReadonlyArray<ServerProviderSkill> {
+  const result = useEnvironmentQuery(
+    target.environmentId !== null && target.instanceId !== null && target.cwd !== null
+      ? serverEnvironment.providerSkills({
+          environmentId: target.environmentId,
+          input: { instanceId: target.instanceId, cwd: target.cwd },
+        })
+      : null,
+  );
+  return result.data?.skills ?? fallbackSkills;
 }
 
 interface ProjectContentSearchTarget {

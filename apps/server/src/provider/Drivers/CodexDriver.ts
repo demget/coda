@@ -21,10 +21,18 @@
  *
  * @module provider/Drivers/CodexDriver
  */
-import { CodexSettings, ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
+import {
+  CodexSettings,
+  ProviderDriverKind,
+  type ServerProvider,
+  type ServerProviderSkill,
+} from "@t3tools/contracts";
+import * as Cache from "effect/Cache";
 import * as Crypto from "effect/Crypto";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { HttpClient } from "effect/unstable/http";
@@ -36,11 +44,16 @@ import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderDriverError } from "../Errors.ts";
 import { makeCodexAdapter } from "../Layers/CodexAdapter.ts";
-import { checkCodexProviderStatus, makePendingCodexProvider } from "../Layers/CodexProvider.ts";
+import {
+  checkCodexProviderStatus,
+  makePendingCodexProvider,
+  probeCodexSkills,
+} from "../Layers/CodexProvider.ts";
+import { resolveCodexLaunchArgs } from "../Layers/codexLaunchArgs.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import type { ProviderDriver, ProviderInstance } from "../ProviderDriver.ts";
-import type { ServerProviderDraft } from "../providerSnapshot.ts";
+import { AUTH_PROBE_TIMEOUT_MS, type ServerProviderDraft } from "../providerSnapshot.ts";
 import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import {
   enrichProviderSnapshotWithVersionAdvisory,
@@ -60,6 +73,14 @@ import {
 const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("codex");
+// Each lookup spawns a short-lived `codex app-server`, so this TTL is longer
+// than Claude's directory walk — long enough that opening the picker
+// repeatedly costs one spawn, short enough that a newly authored skill shows
+// up without restarting the server.
+const SKILLS_TTL = Duration.minutes(2);
+// One entry per workspace the user has touched this session; threads pin
+// their own worktree paths, so several per project is normal.
+const SKILLS_CACHE_CAPACITY = 32;
 const UPDATE = makePackageManagedProviderMaintenanceResolver({
   provider: DRIVER_KIND,
   npmPackageName: "@openai/codex",
@@ -170,6 +191,31 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
         Effect.map(stampIdentity),
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
       );
+      // Keyed by workspace, not by instance: one Codex instance serves every
+      // project, and `.agents/skills` is per-project. The snapshot's `skills`
+      // stay server-cwd-scoped for back-compat; this is what the composer
+      // asks for a specific thread. Discovery failures (codex missing, not
+      // authenticated, app-server too old to know `skills/list`) collapse to
+      // an empty list — the picker degrades, the request does not fail.
+      const skillsCache = yield* Cache.make({
+        capacity: SKILLS_CACHE_CAPACITY,
+        timeToLive: SKILLS_TTL,
+        lookup: (skillsCwd: string) =>
+          probeCodexSkills({
+            binaryPath: effectiveConfig.binaryPath,
+            homePath: effectiveConfig.homePath,
+            launchArgs: resolveCodexLaunchArgs(effectiveConfig.launchArgs, processEnv),
+            cwd: skillsCwd,
+            environment: processEnv,
+          }).pipe(
+            Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+            Effect.scoped,
+            Effect.timeoutOption(Duration.millis(AUTH_PROBE_TIMEOUT_MS)),
+            Effect.map(Option.getOrElse((): ReadonlyArray<ServerProviderSkill> => [])),
+            Effect.orElseSucceed((): ReadonlyArray<ServerProviderSkill> => []),
+          ),
+      });
+
       const snapshotSettings = makeProviderSnapshotSettingsSource(effectiveConfig, serverSettings);
       const snapshot = yield* makeManagedServerProvider<ProviderSnapshotSettings<CodexSettings>>({
         maintenanceCapabilities,
@@ -208,6 +254,7 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
         snapshot,
         adapter,
         textGeneration,
+        listSkills: (skillsCwd: string) => Cache.get(skillsCache, skillsCwd),
       } satisfies ProviderInstance;
     }),
 };

@@ -93,6 +93,38 @@ it.layer(NodeServices.layer)("discoverClaudeSkills", (it) => {
     }),
   );
 
+  it.effect("follows a symlinked project skills directory", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const tempDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-claude-skills-" });
+      const configDir = path.join(tempDir, "claude-home");
+      const workspace = path.join(tempDir, "workspace");
+
+      // The shared Claude/Codex layout: skills are authored once under
+      // `.agents/skills` (what Codex reads) and `.claude/skills` is a single
+      // symlink to it. Discovery has to resolve through that link or every
+      // repo organised this way looks skill-less.
+      yield* writeSkill(
+        path.join(workspace, ".agents", "skills"),
+        "deploy",
+        ["---", "name: deploy", "description: Deploy the app.", "---"].join("\n"),
+      );
+      yield* fs.makeDirectory(path.join(workspace, ".claude"), { recursive: true });
+      yield* fs.symlink(
+        path.join("..", ".agents", "skills"),
+        path.join(workspace, ".claude", "skills"),
+      );
+
+      const skills = yield* discoverClaudeSkills({ homePath: configDir }, workspace);
+
+      assert.deepEqual(
+        skills.map((skill) => ({ name: skill.name, scope: skill.scope })),
+        [{ name: "deploy", scope: "project" }],
+      );
+    }),
+  );
+
   it.effect("falls back to the directory name and skips malformed frontmatter", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

@@ -29,6 +29,7 @@ import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderDriverError } from "../Errors.ts";
 import { makeClaudeAdapter } from "../Layers/ClaudeAdapter.ts";
+import { discoverClaudeSkills } from "./ClaudeSkills.ts";
 import {
   checkClaudeProviderStatus,
   makePendingClaudeProvider,
@@ -59,6 +60,15 @@ const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
 const CAPABILITIES_PROBE_TTL = Duration.minutes(5);
+// Skill discovery is a directory walk, so it can be re-run cheaply and often.
+// The TTL only exists to keep a held-open picker from re-walking on every
+// keystroke; it is short enough that authoring a new skill shows up in the
+// picker without restarting the server.
+const SKILLS_TTL = Duration.seconds(15);
+// One entry per workspace the user has touched this session. Threads pin
+// their own worktree paths, so a project with several open worktrees needs
+// more than a handful of slots.
+const SKILLS_CACHE_CAPACITY = 32;
 
 function isClaudeNativeCommandPath(commandPath: string): boolean {
   const normalized = normalizeCommandPath(commandPath);
@@ -163,6 +173,20 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
       });
       const capabilitiesCacheKey = yield* makeClaudeCapabilitiesCacheKey(effectiveConfig, cwd);
 
+      // Keyed by workspace, not by instance: the same Claude instance serves
+      // every project, and each one has its own `.claude/skills`. The
+      // snapshot's `skills` remain server-cwd-scoped for back-compat; this
+      // is what the composer asks for a specific thread.
+      const skillsCache = yield* Cache.make({
+        capacity: SKILLS_CACHE_CAPACITY,
+        timeToLive: SKILLS_TTL,
+        lookup: (skillsCwd: string) =>
+          discoverClaudeSkills(effectiveConfig, skillsCwd, processEnv).pipe(
+            Effect.provideService(FileSystem.FileSystem, fileSystem),
+            Effect.provideService(Path.Path, path),
+          ),
+      });
+
       const checkProvider = checkClaudeProviderStatus(
         effectiveConfig,
         () => Cache.get(capabilitiesProbeCache, capabilitiesCacheKey),
@@ -216,6 +240,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         snapshot,
         adapter,
         textGeneration,
+        listSkills: (skillsCwd: string) => Cache.get(skillsCache, skillsCwd),
       } satisfies ProviderInstance;
     }),
 };

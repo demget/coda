@@ -508,6 +508,25 @@ export const ProviderRegistryLive = Layer.effect(
       );
     });
 
+    const listSkillsForInstance = Effect.fn("listSkillsForInstance")(function* (
+      instanceId: ProviderInstanceId,
+      cwd: string,
+    ) {
+      const instance = Array.from((yield* Ref.get(liveSubsRef)).values()).find(
+        (candidate) => candidate.instanceId === instanceId,
+      );
+      if (!instance) {
+        return [];
+      }
+      if (instance.listSkills) {
+        return yield* instance.listSkills(cwd);
+      }
+      // Driver has no cwd-scoped discovery. Its snapshot skills — if it
+      // publishes any at all — are the best available answer.
+      const snapshot = yield* instance.snapshot.getSnapshot;
+      return snapshot.skills;
+    });
+
     /**
      * Diff the aggregator's live-source set against the current
      * `ProviderInstanceRegistry` and:
@@ -711,6 +730,7 @@ export const ProviderRegistryLive = Layer.effect(
       refreshInstance: (instanceId: ProviderInstanceId) =>
         refreshInstance(instanceId).pipe(Effect.catchCause(recoverRefreshFailure)),
       getProviderMaintenanceCapabilitiesForInstance,
+      listSkillsForInstance,
       setProviderMaintenanceActionState,
       get streamChanges() {
         return Stream.fromPubSub(changesPubSub);

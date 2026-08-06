@@ -68,6 +68,7 @@ import {
   resolveProviderOptionDescriptors,
 } from "../../lib/providerOptions";
 import { useComposerPathSearch } from "../../state/use-composer-path-search";
+import { useProviderSkills } from "../../state/queries";
 import { ComposerCommandPopover, type ComposerCommandItem } from "./ComposerCommandPopover";
 
 /**
@@ -81,6 +82,9 @@ export const COMPOSER_COLLAPSED_CHROME = 60;
  * Used by the parent to compute the larger feed bottom inset when the composer is focused.
  */
 export const COMPOSER_EXPANDED_CHROME = 174;
+
+// Stable identity so the skills fallback doesn't churn memo dependencies.
+const EMPTY_PROVIDER_SKILLS: T3ServerConfig["providers"][number]["skills"] = [];
 
 export interface ThreadComposerProps {
   readonly draftMessage: string;
@@ -364,6 +368,18 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     cwd: composerTrigger?.kind === "path" ? props.projectCwd : null,
     query: composerTrigger?.kind === "path" ? composerTrigger.query : null,
   });
+  // Resolved against this thread's workspace rather than read off the
+  // provider snapshot: the snapshot's skills are discovered once per
+  // instance against the server's own cwd, so they never include the
+  // project's own `.claude/skills` / `.agents/skills`.
+  const providerSkills = useProviderSkills(
+    {
+      environmentId: props.environmentId,
+      instanceId: props.selectedThread.modelSelection.instanceId,
+      cwd: props.selectedThread.worktreePath ?? props.projectCwd,
+    },
+    selectedProviderStatus?.skills ?? EMPTY_PROVIDER_SKILLS,
+  );
 
   const composerMenuItems: ComposerCommandItem[] = useMemo(() => {
     if (!composerTrigger) return [];
@@ -411,7 +427,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     }
 
     if (composerTrigger.kind === "skill") {
-      const enabledSkills = (selectedProviderStatus?.skills ?? []).filter((s) => s.enabled);
+      const enabledSkills = providerSkills.filter((s) => s.enabled);
       const normalizedQuery = normalizeSearchQuery(composerTrigger.query, {
         trimLeadingPattern: /^\$+/,
       });
@@ -746,7 +762,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
               ref={inputRef}
               multiline
               value={props.draftMessage}
-              skills={selectedProviderStatus?.skills ?? []}
+              skills={providerSkills}
               selection={composerSelection}
               onChangeText={props.onChangeDraftMessage}
               onSelectionChange={handleSelectionChange}
