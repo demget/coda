@@ -683,6 +683,19 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverGetResourceTelemetryHistory,
       staleTimeMs: 5_000,
     }),
+    // Skills are per-workspace, so they can't ride the provider snapshot —
+    // one snapshot serves every project at once. Kept warm past a project
+    // switch so returning to a project doesn't re-walk (Claude) or re-spawn
+    // an app-server (Codex).
+    providerSkills: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:provider-skills",
+      tag: WS_METHODS.providersListSkills,
+      // Skills are hand-authored files on disk, and a Codex lookup costs an
+      // app-server spawn, so this stays well above the usual query cadence.
+      // It bounds how long a newly written skill stays out of the picker.
+      staleTimeMs: 2 * 60_000,
+      idleTtlMs: 10 * 60_000,
+    }),
     configProjection,
     welcome: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:server:welcome",

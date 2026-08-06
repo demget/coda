@@ -10,6 +10,7 @@ import type {
   ProviderInstanceId,
   ProviderDriverKind,
   ServerProvider,
+  ServerProviderSkill,
   ServerProviderUpdateState,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
@@ -56,6 +57,21 @@ export interface ProviderRegistryShape {
     instanceId: ProviderInstanceId,
     provider: ProviderDriverKind,
   ) => Effect.Effect<ProviderMaintenanceCapabilities>;
+
+  /**
+   * Skills the instance would load for `cwd` — the path the provider CLI is
+   * spawned with, i.e. a thread's worktree or its project root.
+   *
+   * Distinct from `ServerProvider.skills`, which is discovered once per
+   * instance against the server process's own cwd and so cannot see any
+   * project's skills but that one's. Falls back to the instance's snapshot
+   * skills when the driver exposes no cwd-scoped discovery, and to an empty
+   * list when the instance is unknown.
+   */
+  readonly listSkillsForInstance: (
+    instanceId: ProviderInstanceId,
+    cwd: string,
+  ) => Effect.Effect<ReadonlyArray<ServerProviderSkill>>;
 
   /**
    * Apply volatile maintenance-action state to one configured instance.

@@ -26,6 +26,7 @@ import type { StatusTone } from "../../components/StatusPill";
 import type { DraftComposerImageAttachment } from "../../lib/composerImages";
 import { CHAT_CONTENT_MAX_WIDTH, type LayoutVariant } from "../../lib/layout";
 import { scopedThreadKey } from "../../lib/scopedEntities";
+import { useProviderSkills } from "../../state/queries";
 import type {
   PendingApproval,
   PendingUserInput,
@@ -225,11 +226,22 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const contentMaxWidth = isSplitLayout ? CHAT_CONTENT_MAX_WIDTH : undefined;
   const selectedInstanceId = props.selectedThread.modelSelection.instanceId;
   useStreamingHaptics(props.selectedThread.id, props.selectedThreadFeed);
-  const selectedProviderSkills = useMemo(
+  const snapshotSkills = useMemo(
     () =>
       props.serverConfig?.providers.find((provider) => provider.instanceId === selectedInstanceId)
         ?.skills ?? [],
     [props.serverConfig, selectedInstanceId],
+  );
+  // Workspace-scoped for the same reason the composer's `$` picker is: a
+  // skill chip in the feed has to resolve against the project that ran it,
+  // not the server's own cwd. Shares the composer's atom entry.
+  const selectedProviderSkills = useProviderSkills(
+    {
+      environmentId: props.environmentId,
+      instanceId: selectedInstanceId,
+      cwd: props.selectedThread.worktreePath ?? props.projectWorkspaceRoot,
+    },
+    snapshotSkills,
   );
 
   useLayoutEffect(() => {

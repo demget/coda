@@ -97,6 +97,36 @@ export const ServerProviderSkill = Schema.Struct({
 export type ServerProviderSkill = typeof ServerProviderSkill.Type;
 
 /**
+ * Request the skills one provider instance would load for a specific
+ * working directory.
+ *
+ * `ServerProvider.skills` cannot answer this: a snapshot is global to the
+ * instance and is discovered against the server process's own cwd, while
+ * every thread runs in its own project or worktree. Project-scoped skills
+ * (`<cwd>/.claude/skills`, `<cwd>/.agents/skills`) are therefore invisible
+ * to the snapshot for every project except whichever one the server
+ * happened to start in.
+ */
+export const ServerProviderSkillsInput = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  /**
+   * Absolute workspace path the skills are resolved against — a thread's
+   * worktree when it has one, otherwise the project root. This is the same
+   * cwd the provider CLI is spawned with, so the picker offers exactly the
+   * skills the run would load.
+   */
+  cwd: TrimmedNonEmptyString,
+});
+export type ServerProviderSkillsInput = typeof ServerProviderSkillsInput.Type;
+
+export const ServerProviderSkillsResult = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  cwd: TrimmedNonEmptyString,
+  skills: Schema.Array(ServerProviderSkill),
+});
+export type ServerProviderSkillsResult = typeof ServerProviderSkillsResult.Type;
+
+/**
  * Availability of a configured provider instance from the runtime's POV.
  *
  *  - `available` — the build ships this driver and an instance is wired

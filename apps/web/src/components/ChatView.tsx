@@ -203,6 +203,7 @@ import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../termina
 import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { projectEnvironment } from "../state/projects";
 import { useEnvironmentQuery } from "../state/query";
+import { useProviderSkills } from "../state/queries";
 import {
   primaryServerAvailableEditorsAtom,
   primaryServerKeybindingsAtom,
@@ -2480,6 +2481,19 @@ function ChatViewContent(props: ChatViewProps) {
     const defaultInstanceId = defaultInstanceIdForDriver(selectedProvider);
     return providerStatuses.find((status) => status.instanceId === defaultInstanceId) ?? null;
   }, [activeProviderInstanceId, providerStatuses, selectedProvider]);
+  // Workspace-scoped for the same reason the composer's `$` picker is: a
+  // skill chip in the timeline has to resolve against the project that ran
+  // it, not the server's own cwd. Keyed on the thread's provider, which is
+  // usually — but not always — the one the composer has selected, so this
+  // shares the composer's atom entry whenever the two agree.
+  const timelineSkills = useProviderSkills(
+    {
+      environmentId,
+      instanceId: activeProviderStatus?.instanceId ?? null,
+      cwd: gitCwd,
+    },
+    activeProviderStatus?.skills ?? EMPTY_PROVIDER_SKILLS,
+  );
   const providerStatusBannerKey = getProviderStatusBannerKey(activeProviderStatus);
   const [dismissedProviderStatusBannerKey, setDismissedProviderStatusBannerKey] = useState<
     string | null
@@ -5839,7 +5853,7 @@ function ChatViewContent(props: ChatViewProps) {
                 resolvedTheme={resolvedTheme}
                 timestampFormat={timestampFormat}
                 workspaceRoot={activeWorkspaceRoot}
-                skills={activeProviderStatus?.skills ?? EMPTY_PROVIDER_SKILLS}
+                skills={timelineSkills}
                 anchorMessageId={timelineAnchorMessageId}
                 onAnchorReady={onTimelineAnchorReady}
                 onAnchorSizeChanged={onTimelineAnchorSizeChanged}

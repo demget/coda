@@ -319,14 +319,22 @@ export function buildCodexInitializeParams(): CodexSchema.V1InitializeParams {
   };
 }
 
-const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(function* (input: {
+interface CodexAppServerConnectionInput {
   readonly binaryPath: string;
   readonly homePath?: string;
   readonly launchArgs?: string;
   readonly cwd: string;
-  readonly customModels?: ReadonlyArray<string>;
   readonly environment?: NodeJS.ProcessEnv;
-}) {
+}
+
+/**
+ * Spawn a scoped `codex app-server`, complete the initialize handshake, and
+ * hand back the client plus the version parsed from its user agent. The
+ * child process is owned by the caller's scope.
+ */
+const connectCodexAppServer = Effect.fn("connectCodexAppServer")(function* (
+  input: CodexAppServerConnectionInput,
+) {
   // `~` is not shell-expanded when env vars are set via `child_process.spawn`,
   // so `CODEX_HOME=~/.codex_work` would reach codex verbatim and trip
   // "CODEX_HOME points to '~/.codex_work', but that path does not exist".
@@ -383,7 +391,35 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
 
   // Extract the version string after the first '/' in userAgent, up to the next space or the end
   const versionMatch = initialize.userAgent.match(/\/([^\s]+)/);
-  const version = versionMatch ? versionMatch[1] : undefined;
+  return { client, version: versionMatch ? versionMatch[1] : undefined } as const;
+});
+
+/**
+ * List the skills Codex resolves for one working directory.
+ *
+ * Separate from `probeCodexAppServerProvider` because the snapshot probe
+ * runs once per instance against a single cwd, while skills are per-project:
+ * `.agents/skills` lives in the workspace, so the answer differs for every
+ * thread. Skipping `account/read` and `model/list` keeps this to one
+ * round-trip after the handshake.
+ */
+export const probeCodexSkills = Effect.fn("probeCodexSkills")(function* (
+  input: CodexAppServerConnectionInput,
+) {
+  const { client } = yield* connectCodexAppServer(input);
+  const skillsResponse = yield* client.request("skills/list", { cwds: [input.cwd] });
+  return parseCodexSkillsListResponse(skillsResponse, input.cwd);
+});
+
+const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(function* (input: {
+  readonly binaryPath: string;
+  readonly homePath?: string;
+  readonly launchArgs?: string;
+  readonly cwd: string;
+  readonly customModels?: ReadonlyArray<string>;
+  readonly environment?: NodeJS.ProcessEnv;
+}) {
+  const { client, version } = yield* connectCodexAppServer(input);
 
   const accountResponse = yield* client.request("account/read", {});
   if (!accountResponse.account && accountResponse.requiresOpenaiAuth) {

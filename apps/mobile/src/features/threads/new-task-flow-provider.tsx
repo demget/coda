@@ -41,7 +41,7 @@ import {
   updateComposerDraftSettings,
   useComposerDraft,
 } from "../../state/use-composer-drafts";
-import { useBranches } from "../../state/queries";
+import { useBranches, useProviderSkills } from "../../state/queries";
 import {
   flattenQueuedThreadMessages,
   threadOutboxManager,
@@ -406,12 +406,23 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
         option.selection.instanceId === selectedModel.instanceId &&
         option.selection.model === selectedModel.model,
     ) ?? null;
-  const selectedProviderSkills = useMemo(
+  const snapshotProviderSkills = useMemo(
     () =>
       selectedEnvironmentServerConfig?.providers.find(
         (provider) => provider.instanceId === selectedModel?.instanceId,
       )?.skills ?? [],
     [selectedEnvironmentServerConfig, selectedModel?.instanceId],
+  );
+  // Resolved against the workspace this draft will run in — the snapshot's
+  // skills are discovered once per instance against the server's own cwd and
+  // so never include the project's `.claude/skills` / `.agents/skills`.
+  const selectedProviderSkills = useProviderSkills(
+    {
+      environmentId: selectedEnvironmentId,
+      instanceId: selectedModel?.instanceId ?? null,
+      cwd: selectedWorktreePath ?? selectedProject?.workspaceRoot ?? null,
+    },
+    snapshotProviderSkills,
   );
   const setSelectedModelKey = useCallback(
     (key: string | null) => {
