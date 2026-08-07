@@ -1728,6 +1728,30 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
           },
         });
 
+        const turnsAfterRequest = yield* sql<{ readonly turnId: string }>`
+          SELECT turn_id AS "turnId"
+          FROM projection_turns
+          WHERE thread_id = 'thread-conflict'
+        `;
+        assert.deepEqual(turnsAfterRequest, []);
+
+        yield* appendAndProject({
+          type: "thread.turn-interrupted",
+          eventId: EventId.make("evt-conflict-interrupted"),
+          aggregateKind: "thread",
+          aggregateId: ThreadId.make("thread-conflict"),
+          occurredAt: "2026-02-26T13:00:02.100Z",
+          commandId: CommandId.make("cmd-conflict-interrupted"),
+          causationEventId: null,
+          correlationId: CorrelationId.make("cmd-conflict-interrupted"),
+          metadata: {},
+          payload: {
+            threadId: ThreadId.make("thread-conflict"),
+            turnId: TurnId.make("turn-interrupted"),
+            createdAt: "2026-02-26T13:00:02.100Z",
+          },
+        });
+
         yield* appendAndProject({
           type: "thread.message-sent",
           eventId: EventId.make("evt-conflict-4"),

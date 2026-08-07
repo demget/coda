@@ -681,6 +681,20 @@ function currentProviderThreadId(session: ProviderSession): string | undefined {
   return readResumeCursorThreadId(session.resumeCursor);
 }
 
+export function resolveCodexActiveTurnAfterStart(
+  currentActiveTurnId: TurnId | undefined,
+  startedTurnId: TurnId,
+): TurnId {
+  return currentActiveTurnId ?? startedTurnId;
+}
+
+export function codexTurnCompletionMatchesActiveTurn(
+  activeTurnId: TurnId | undefined,
+  completedTurnId: string,
+): boolean {
+  return activeTurnId === undefined || activeTurnId === completedTurnId;
+}
+
 function updateSession(
   sessionRef: Ref.Ref<ProviderSession>,
   updates: Partial<ProviderSession>,
@@ -930,20 +944,27 @@ export const makeCodexSessionRuntime = (
 
     yield* client.handleServerNotification("turn/completed", (payload) =>
       currentSessionProviderThreadId.pipe(
-        Effect.flatMap((providerThreadId) => {
-          if (providerThreadId && payload.threadId !== providerThreadId) {
-            return Effect.void;
-          }
-          const lastError =
-            payload.turn.status === "failed" && "error" in payload.turn && payload.turn.error
-              ? payload.turn.error.message
-              : undefined;
-          return updateSession(sessionRef, {
-            status: payload.turn.status === "failed" ? "error" : "ready",
-            activeTurnId: undefined,
-            ...(lastError ? { lastError } : {}),
-          });
-        }),
+        Effect.flatMap((providerThreadId) =>
+          Ref.get(sessionRef).pipe(
+            Effect.flatMap((session) => {
+              if (providerThreadId && payload.threadId !== providerThreadId) {
+                return Effect.void;
+              }
+              if (!codexTurnCompletionMatchesActiveTurn(session.activeTurnId, payload.turn.id)) {
+                return Effect.void;
+              }
+              const lastError =
+                payload.turn.status === "failed" && "error" in payload.turn && payload.turn.error
+                  ? payload.turn.error.message
+                  : undefined;
+              return updateSession(sessionRef, {
+                status: payload.turn.status === "failed" ? "error" : "ready",
+                activeTurnId: undefined,
+                ...(lastError ? { lastError } : {}),
+              });
+            }),
+          ),
+        ),
       ),
     );
 
@@ -1313,9 +1334,12 @@ export const makeCodexSessionRuntime = (
             ),
           );
           const turnId = TurnId.make(response.turn.id);
+          const currentSession = yield* Ref.get(sessionRef);
           yield* updateSession(sessionRef, {
             status: "running",
-            activeTurnId: turnId,
+            // turn/start may queue behind an already-running turn. Keep the
+            // provider-confirmed active id until turn/started advances it.
+            activeTurnId: resolveCodexActiveTurnAfterStart(currentSession.activeTurnId, turnId),
             ...(normalizedModel ? { model: normalizedModel } : {}),
           });
           const resumedProviderThreadId = currentProviderThreadId(yield* Ref.get(sessionRef));

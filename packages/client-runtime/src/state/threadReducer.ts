@@ -205,10 +205,10 @@ export function applyThreadDetailEvent(
         },
       };
 
-    case "thread.turn-interrupt-requested": {
-      if (event.payload.turnId === undefined) {
-        return { kind: "unchanged" };
-      }
+    case "thread.turn-interrupt-requested":
+      return { kind: "unchanged" };
+
+    case "thread.turn-interrupted": {
       const latestTurn = thread.latestTurn;
       if (latestTurn === null || latestTurn.turnId !== event.payload.turnId) {
         return { kind: "unchanged" };
