@@ -1138,8 +1138,39 @@ const make = Effect.gen(function* () {
       });
     }
 
-    // Orchestration turn ids are not provider turn ids, so interrupt by session.
-    yield* providerService.interruptTurn({ threadId: event.payload.threadId });
+    const turnId = event.payload.turnId;
+    const interrupted = yield* providerService
+      .interruptTurn({
+        threadId: event.payload.threadId,
+        ...(turnId !== undefined ? { turnId } : {}),
+      })
+      .pipe(
+        Effect.as(true),
+        Effect.catchCause((cause) =>
+          appendProviderFailureActivity({
+            threadId: event.payload.threadId,
+            kind: "provider.turn.interrupt.failed",
+            summary: "Provider turn interrupt failed",
+            detail: formatFailureDetail(cause),
+            turnId: turnId ?? null,
+            createdAt: event.payload.createdAt,
+          }).pipe(Effect.as(false)),
+        ),
+      );
+    if (!interrupted || turnId === undefined) {
+      return;
+    }
+    yield* serverCommandId("provider-turn-interrupted").pipe(
+      Effect.flatMap((commandId) =>
+        orchestrationEngine.dispatch({
+          type: "thread.turn.interrupted",
+          commandId,
+          threadId: event.payload.threadId,
+          turnId,
+          createdAt: event.payload.createdAt,
+        }),
+      ),
+    );
   });
 
   const processApprovalResponseRequested = Effect.fn("processApprovalResponseRequested")(function* (

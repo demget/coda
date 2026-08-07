@@ -405,6 +405,56 @@ describe("applyThreadDetailEvent", () => {
     });
   });
 
+  describe("turn interruption", () => {
+    const runningThread: OrchestrationThread = {
+      ...baseThread,
+      latestTurn: {
+        turnId: TurnId.make("turn-1"),
+        state: "running",
+        requestedAt: "2026-04-01T06:59:00.000Z",
+        startedAt: "2026-04-01T06:59:00.000Z",
+        completedAt: null,
+        assistantMessageId: null,
+      },
+    };
+
+    it("waits for provider confirmation before marking the turn interrupted", () => {
+      const requested = applyThreadDetailEvent(runningThread, {
+        ...baseEventFields,
+        sequence: 9,
+        occurredAt: "2026-04-01T07:00:00.000Z",
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        type: "thread.turn-interrupt-requested",
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          turnId: TurnId.make("turn-1"),
+          createdAt: "2026-04-01T07:00:00.000Z",
+        },
+      });
+      expect(requested.kind).toBe("unchanged");
+
+      const confirmed = applyThreadDetailEvent(runningThread, {
+        ...baseEventFields,
+        sequence: 10,
+        occurredAt: "2026-04-01T07:00:01.000Z",
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        type: "thread.turn-interrupted",
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          turnId: TurnId.make("turn-1"),
+          createdAt: "2026-04-01T07:00:01.000Z",
+        },
+      });
+      expect(confirmed.kind).toBe("updated");
+      if (confirmed.kind === "updated") {
+        expect(confirmed.thread.latestTurn?.state).toBe("interrupted");
+        expect(confirmed.thread.latestTurn?.completedAt).toBe("2026-04-01T07:00:01.000Z");
+      }
+    });
+  });
+
   describe("thread.session-set", () => {
     it("settles a running latestTurn when the session leaves the running status", () => {
       const threadWithRunningTurn: OrchestrationThread = {

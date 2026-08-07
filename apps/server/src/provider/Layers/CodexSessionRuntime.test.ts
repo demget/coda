@@ -4,7 +4,7 @@ import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { describe } from "vite-plus/test";
-import { DEFAULT_MODEL, ThreadId } from "@t3tools/contracts";
+import { DEFAULT_MODEL, ThreadId, TurnId } from "@t3tools/contracts";
 import * as CodexErrors from "effect-codex-app-server/errors";
 import * as CodexRpc from "effect-codex-app-server/rpc";
 
@@ -16,11 +16,30 @@ import {
 import { codexSessionAppServerArgs } from "./codexLaunchArgs.ts";
 import {
   buildTurnStartParams,
+  codexTurnCompletionMatchesActiveTurn,
   hasConfiguredMcpServer,
   isRecoverableThreadResumeError,
   openCodexThread,
+  resolveCodexActiveTurnAfterStart,
 } from "./CodexSessionRuntime.ts";
 const isCodexAppServerRequestError = Schema.is(CodexErrors.CodexAppServerRequestError);
+
+describe("Codex active turn tracking", () => {
+  it("keeps the provider-confirmed active turn when turn/start queues another turn", () => {
+    const activeTurnId = TurnId.make("turn-active");
+    const queuedTurnId = TurnId.make("turn-queued");
+
+    NodeAssert.equal(resolveCodexActiveTurnAfterStart(activeTurnId, queuedTurnId), activeTurnId);
+    NodeAssert.equal(resolveCodexActiveTurnAfterStart(undefined, queuedTurnId), queuedTurnId);
+  });
+
+  it("does not let an out-of-order completion clear a newer active turn", () => {
+    const activeTurnId = TurnId.make("turn-new");
+
+    NodeAssert.equal(codexTurnCompletionMatchesActiveTurn(activeTurnId, "turn-old"), false);
+    NodeAssert.equal(codexTurnCompletionMatchesActiveTurn(activeTurnId, "turn-new"), true);
+  });
+});
 
 describe("CodexSessionRuntimeIdentifierGenerationError", () => {
   it("retains identifier purpose and the random source failure", () => {
