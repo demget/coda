@@ -132,6 +132,8 @@ import {
   ServerRemoveKeybindingInput,
   ServerRemoveKeybindingResult,
   ServerProviderUpdatedPayload,
+  ServerProviderSkillsInput,
+  ServerProviderSkillsResult,
   ServerSelfUpdateError,
   ServerSelfUpdateInput,
   ServerSelfUpdateProgressEvent,
@@ -243,6 +245,9 @@ export const WS_METHODS = {
   serverReportClientActivity: "server.reportClientActivity",
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
+
+  // Provider instance methods
+  providersListSkills: "providers.listSkills",
 
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
@@ -412,6 +417,12 @@ export const WsServerReportHostPowerStateRpc = Rpc.make(WS_METHODS.serverReportH
 export const WsServerGetBackgroundPolicyRpc = Rpc.make(WS_METHODS.serverGetBackgroundPolicy, {
   payload: Schema.Struct({}),
   success: BackgroundPolicySnapshot,
+  error: EnvironmentAuthorizationError,
+});
+
+export const WsProvidersListSkillsRpc = Rpc.make(WS_METHODS.providersListSkills, {
+  payload: ServerProviderSkillsInput,
+  success: ServerProviderSkillsResult,
   error: EnvironmentAuthorizationError,
 });
 
@@ -815,6 +826,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
   WsServerGetBackgroundPolicyRpc,
+  WsProvidersListSkillsRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
   WsSourceControlLookupRepositoryRpc,

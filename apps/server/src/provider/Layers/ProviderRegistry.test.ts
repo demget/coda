@@ -893,6 +893,143 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
         }),
       );
 
+      it.effect("resolves skills per workspace, not from the shared snapshot", () =>
+        Effect.gen(function* () {
+          const codexDriver = ProviderDriverKind.make("codex");
+          const codexInstanceId = ProviderInstanceId.make("codex");
+          const cursorInstanceId = ProviderInstanceId.make("cursor");
+          // What the snapshot holds: discovered once, against the server
+          // process's own cwd, and therefore wrong for every project.
+          const snapshotSkill = {
+            name: "server-cwd-skill",
+            path: "/servers/cwd/.claude/skills/server-cwd-skill/SKILL.md",
+            enabled: true,
+          } as const;
+          const snapshot = {
+            instanceId: codexInstanceId,
+            driver: codexDriver,
+            status: "ready",
+            enabled: true,
+            installed: true,
+            auth: { status: "authenticated" },
+            checkedAt: "2026-06-10T00:00:00.000Z",
+            version: null,
+            models: [],
+            slashCommands: [],
+            skills: [snapshotSkill],
+          } as const satisfies ServerProvider;
+          const requestedCwds = yield* Ref.make<ReadonlyArray<string>>([]);
+          const makeInstance = (
+            instanceId: ProviderInstanceId,
+            listSkills?: ProviderInstance["listSkills"],
+          ) =>
+            ({
+              instanceId,
+              driverKind: codexDriver,
+              continuationIdentity: {
+                driverKind: codexDriver,
+                continuationKey: `codex:instance:${instanceId}`,
+              },
+              displayName: undefined,
+              enabled: true,
+              snapshot: {
+                maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
+                  provider: codexDriver,
+                  packageName: null,
+                }),
+                getSnapshot: Effect.succeed({ ...snapshot, instanceId }),
+                refresh: Effect.succeed({ ...snapshot, instanceId }),
+                streamChanges: Stream.empty,
+              },
+              adapter: {} as ProviderInstance["adapter"],
+              textGeneration: {} as ProviderInstance["textGeneration"],
+              ...(listSkills ? { listSkills } : {}),
+            }) satisfies ProviderInstance;
+
+          const codexInstance = makeInstance(codexInstanceId, (cwd) =>
+            Ref.update(requestedCwds, (cwds) => [...cwds, cwd]).pipe(
+              Effect.as([
+                {
+                  name: "project-skill",
+                  path: `${cwd}/.agents/skills/project-skill/SKILL.md`,
+                  enabled: true,
+                  scope: "project",
+                },
+              ]),
+            ),
+          );
+          // A driver with no cwd-scoped discovery at all.
+          const cursorInstance = makeInstance(cursorInstanceId);
+          const instances = [codexInstance, cursorInstance];
+          const instanceRegistryLayer = Layer.succeed(
+            ProviderInstanceRegistry.ProviderInstanceRegistry,
+            {
+              getInstance: (instanceId) =>
+                Effect.succeed(instances.find((candidate) => candidate.instanceId === instanceId)),
+              listInstances: Effect.succeed(instances),
+              listUnavailable: Effect.succeed([]),
+              streamChanges: Stream.empty,
+              subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), PubSub.subscribe),
+            },
+          );
+          const scope = yield* Scope.make();
+          yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+          const runtimeServices = yield* Layer.build(
+            ProviderRegistryLive.pipe(
+              Layer.provideMerge(instanceRegistryLayer),
+              Layer.provideMerge(
+                ServerConfig.layerTest(process.cwd(), {
+                  prefix: "t3-provider-registry-skills-",
+                }),
+              ),
+              Layer.provideMerge(NodeServices.layer),
+            ),
+          ).pipe(Scope.provide(scope));
+
+          yield* Effect.gen(function* () {
+            const registry = yield* ProviderRegistry.ProviderRegistry;
+
+            // Two different workspaces get two different answers, each
+            // resolved against the cwd it was asked about.
+            const projectSkills = yield* registry.listSkillsForInstance(
+              codexInstanceId,
+              "/projects/lilin",
+            );
+            assert.deepStrictEqual(
+              projectSkills.map((skill) => skill.path),
+              ["/projects/lilin/.agents/skills/project-skill/SKILL.md"],
+            );
+            const worktreeSkills = yield* registry.listSkillsForInstance(
+              codexInstanceId,
+              "/worktrees/lilin-abc",
+            );
+            assert.deepStrictEqual(
+              worktreeSkills.map((skill) => skill.path),
+              ["/worktrees/lilin-abc/.agents/skills/project-skill/SKILL.md"],
+            );
+            assert.deepStrictEqual(yield* Ref.get(requestedCwds), [
+              "/projects/lilin",
+              "/worktrees/lilin-abc",
+            ]);
+
+            // No cwd-scoped discovery: the snapshot is the best answer left.
+            assert.deepStrictEqual(
+              yield* registry.listSkillsForInstance(cursorInstanceId, "/projects/lilin"),
+              [snapshotSkill],
+            );
+
+            // Unknown instance resolves empty rather than failing the call.
+            assert.deepStrictEqual(
+              yield* registry.listSkillsForInstance(
+                ProviderInstanceId.make("does-not-exist"),
+                "/projects/lilin",
+              ),
+              [],
+            );
+          }).pipe(Effect.provide(runtimeServices));
+        }),
+      );
+
       it("persists merged provider snapshots for the providers that were refreshed", () => {
         const previousProviders = [
           {

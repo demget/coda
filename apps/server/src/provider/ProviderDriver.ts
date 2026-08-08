@@ -25,6 +25,7 @@ import type {
   ProviderDriverKind,
   ProviderInstanceEnvironment,
   ProviderInstanceId,
+  ServerProviderSkill,
 } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";
 import type * as Schema from "effect/Schema";
@@ -71,6 +72,22 @@ export interface ProviderInstance {
   readonly snapshot: ServerProviderShape;
   readonly adapter: ProviderAdapterShape<ProviderAdapterError>;
   readonly textGeneration: TextGeneration.TextGeneration["Service"];
+  /**
+   * Skills this instance would load for `cwd`, for drivers that resolve
+   * skills relative to the working directory.
+   *
+   * `snapshot` cannot answer this. One snapshot serves every project and
+   * thread at once, so it is discovered against a single cwd — the server
+   * process's own — and project-scoped skills (`<cwd>/.claude/skills`,
+   * `<cwd>/.agents/skills`) are invisible for every other project. Callers
+   * pass the cwd the provider CLI will actually be spawned with.
+   *
+   * Best-effort by contract: implementations swallow their own discovery
+   * failures and return `[]` rather than failing, so a broken skill tree
+   * degrades the picker instead of the request. Omitted entirely by drivers
+   * with no notion of skills; callers fall back to `snapshot`.
+   */
+  readonly listSkills?: (cwd: string) => Effect.Effect<ReadonlyArray<ServerProviderSkill>>;
 }
 
 export interface ProviderContinuationIdentity {
