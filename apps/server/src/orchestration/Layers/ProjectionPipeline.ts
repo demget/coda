@@ -1296,10 +1296,10 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           return;
         }
 
-        case "thread.turn-interrupt-requested": {
-          if (event.payload.turnId === undefined) {
-            return;
-          }
+        case "thread.turn-interrupt-requested":
+          return;
+
+        case "thread.turn-interrupted": {
           const existingTurn = yield* projectionTurnRepository.getByTurnId({
             threadId: event.payload.threadId,
             turnId: event.payload.turnId,

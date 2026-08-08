@@ -151,6 +151,7 @@ describe("ProviderCommandReactor", () => {
     readonly startSessionEffect?: (
       session: ProviderSession,
     ) => Effect.Effect<ProviderSession, ProviderAdapterRequestError>;
+    readonly interruptTurnEffect?: Effect.Effect<void, ProviderAdapterRequestError>;
   }) {
     const now = "2026-01-01T00:00:00.000Z";
     const baseDir =
@@ -233,7 +234,7 @@ describe("ProviderCommandReactor", () => {
         turnId: asTurnId("turn-1"),
       }),
     );
-    const interruptTurn = vi.fn((_: unknown) => Effect.void);
+    const interruptTurn = vi.fn((_: unknown) => input?.interruptTurnEffect ?? Effect.void);
     const respondToRequest = vi.fn<ProviderServiceShape["respondToRequest"]>(() => Effect.void);
     const respondToUserInput = vi.fn<ProviderServiceShape["respondToUserInput"]>(() => Effect.void);
     const stopSession = vi.fn((input: unknown) =>
@@ -2351,7 +2352,81 @@ describe("ProviderCommandReactor", () => {
     await waitFor(() => harness.interruptTurn.mock.calls.length === 1);
     expect(harness.interruptTurn.mock.calls[0]?.[0]).toEqual({
       threadId: "thread-1",
+      turnId: "turn-1",
     });
+    await harness.drain();
+    const events = Array.from(
+      await harness.runEffect(Stream.runCollect(harness.engine.readEvents(0))),
+    );
+    expect(
+      events.some(
+        (event) => event.type === "thread.turn-interrupted" && event.payload.turnId === "turn-1",
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps the turn running and records a visible activity when provider interrupt fails", async () => {
+    const now = "2026-01-01T00:00:00.000Z";
+    const harness = await createHarness({
+      interruptTurnEffect: Effect.fail(
+        new ProviderAdapterRequestError({
+          provider: ProviderDriverKind.make("codex"),
+          method: "turn/interrupt",
+          detail: "expected active turn turn-1 but found turn-2",
+        }),
+      ),
+    });
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-set-interrupt-failure"),
+        threadId: ThreadId.make("thread-1"),
+        session: {
+          threadId: ThreadId.make("thread-1"),
+          status: "running",
+          providerName: "codex",
+          runtimeMode: "approval-required",
+          activeTurnId: asTurnId("turn-1"),
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.interrupt",
+        commandId: CommandId.make("cmd-turn-interrupt-failure"),
+        threadId: ThreadId.make("thread-1"),
+        turnId: asTurnId("turn-1"),
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(async () => {
+      const readModel = await harness.readModel();
+      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+      return (
+        thread?.activities.some((activity) => activity.kind === "provider.turn.interrupt.failed") ??
+        false
+      );
+    });
+
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread?.session).toMatchObject({ status: "running", activeTurnId: "turn-1" });
+    expect(
+      thread?.activities.find((activity) => activity.kind === "provider.turn.interrupt.failed"),
+    ).toMatchObject({
+      turnId: "turn-1",
+      payload: { detail: "expected active turn turn-1 but found turn-2" },
+    });
+    const events = Array.from(
+      await harness.runEffect(Stream.runCollect(harness.engine.readEvents(0))),
+    );
+    expect(events.some((event) => event.type === "thread.turn-interrupted")).toBe(false);
   });
 
   it("starts a fresh session when only projected session state exists", async () => {

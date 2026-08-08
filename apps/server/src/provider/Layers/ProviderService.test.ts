@@ -864,8 +864,11 @@ routing.layer("ProviderServiceLive routing", (it) => {
       });
       assert.equal(routing.codex.sendTurn.mock.calls.length, 1);
 
-      yield* provider.interruptTurn({ threadId: session.threadId });
-      assert.deepEqual(routing.codex.interruptTurn.mock.calls, [[session.threadId, undefined]]);
+      const interruptedTurnId = asTurnId("turn-target");
+      yield* provider.interruptTurn({ threadId: session.threadId, turnId: interruptedTurnId });
+      assert.deepEqual(routing.codex.interruptTurn.mock.calls, [
+        [session.threadId, interruptedTurnId],
+      ]);
 
       yield* provider.respondToRequest({
         threadId: session.threadId,

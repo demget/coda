@@ -686,6 +686,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       // browser tool calls used to lose the toolkit outright.
       yield* McpSessionRegistry.touchActiveMcpThread(input.threadId);
       const turn = yield* routed.adapter.sendTurn(input);
+      const activeTurnId =
+        (yield* routed.adapter.listSessions()).find(
+          (session) => session.threadId === input.threadId,
+        )?.activeTurnId ?? turn.turnId;
       yield* directory.upsert({
         threadId: input.threadId,
         provider: routed.adapter.provider,
@@ -694,7 +698,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         ...(turn.resumeCursor !== undefined ? { resumeCursor: turn.resumeCursor } : {}),
         runtimePayload: {
           ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
-          activeTurnId: turn.turnId,
+          activeTurnId,
           lastRuntimeEvent: "provider.sendTurn",
           lastRuntimeEventAt: yield* nowIso,
         },
