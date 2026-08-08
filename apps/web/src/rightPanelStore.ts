@@ -5,7 +5,7 @@
  * surface descriptors and the active surface, while each feature continues to
  * own its durable resource state. Browser surfaces point at preview tab ids,
  * terminal surfaces point at terminal session ids, file surfaces point at
- * workspace paths, and diff/plan/files remain singleton surfaces.
+ * workspace paths, and diff/files remain singleton surfaces.
  */
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
@@ -14,7 +14,14 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "./lib/storage";
 
-export const RIGHT_PANEL_KINDS = ["plan", "diff", "files", "file", "preview", "terminal"] as const;
+export const RIGHT_PANEL_KINDS = [
+  "diff",
+  "files",
+  "file",
+  "preview",
+  "terminal",
+  "agents",
+] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
 export type RightPanelSurface =
@@ -37,10 +44,30 @@ export type RightPanelSurface =
       revealLine: number | null;
       revealRequestId: number;
     }
-  | { id: "plan"; kind: "plan" };
+  | { id: "agents"; kind: "agents" };
 
-const RIGHT_PANEL_STORAGE_KEY = "coda:right-panel-state:v2";
-const RIGHT_PANEL_STORAGE_VERSION = 7;
+const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
+const LEGACY_CODA_RIGHT_PANEL_STORAGE_KEY = "coda:right-panel-state:v2";
+// v9 removed the "plan" surface kind (plans render inline in the transcript).
+const RIGHT_PANEL_STORAGE_VERSION = 9;
+
+/**
+ * Coda persisted this store under its own prefix before adopting upstream's
+ * key. Carry the old payload over once so panel layouts survive the sync; the
+ * regular version migration then takes it the rest of the way.
+ */
+function adoptLegacyCodaRightPanelState(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const storage = window.localStorage;
+    if (storage.getItem(RIGHT_PANEL_STORAGE_KEY) !== null) return;
+    const legacy = storage.getItem(LEGACY_CODA_RIGHT_PANEL_STORAGE_KEY);
+    if (legacy === null) return;
+    storage.setItem(RIGHT_PANEL_STORAGE_KEY, legacy);
+  } catch {
+    // A blocked or full storage just means the panel opens at its defaults.
+  }
+}
 
 export interface ThreadRightPanelState {
   isOpen: boolean;
@@ -90,8 +117,8 @@ const singletonSurface = (
       return { id: "diff", kind };
     case "files":
       return { id: "files", kind };
-    case "plan":
-      return { id: "plan", kind };
+    case "agents":
+      return { id: "agents", kind };
   }
 };
 
@@ -170,6 +197,9 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                 threadState && typeof threadState === "object" ? threadState : null;
               const surfaces = Array.isArray(validThreadState?.surfaces)
                 ? validThreadState.surfaces.flatMap<RightPanelSurface>((surface) => {
+                    // Dropped surface kind: plans now render inline in the
+                    // transcript (v9).
+                    if ((surface as { kind?: string }).kind === "plan") return [];
                     if (surface.kind === "file") {
                       const revealLine =
                         typeof surface.revealLine === "number" &&
@@ -218,15 +248,23 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                     ];
                   })
                 : [];
-              const activeSurfaceId = surfaces.some(
+              const persistedActiveSurfaceId = surfaces.some(
                 (surface) => surface.id === validThreadState?.activeSurfaceId,
               )
                 ? (validThreadState?.activeSurfaceId ?? null)
                 : null;
+              // A migration that dropped every surface (e.g. plan-only panels
+              // in v9) must not reopen an empty panel.
               const isOpen =
-                typeof validThreadState?.isOpen === "boolean"
+                surfaces.length > 0 &&
+                (typeof validThreadState?.isOpen === "boolean"
                   ? validThreadState.isOpen
-                  : activeSurfaceId !== null;
+                  : persistedActiveSurfaceId !== null);
+              // An open panel needs an active surface: if migration dropped
+              // the persisted one (e.g. plan was active), fall back to the
+              // first survivor instead of rendering an open empty panel.
+              const activeSurfaceId =
+                persistedActiveSurfaceId ?? (isOpen ? (surfaces[0]?.id ?? null) : null);
               return [threadKey, { isOpen, surfaces, activeSurfaceId }];
             },
           ),
@@ -524,9 +562,10 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
     {
       name: RIGHT_PANEL_STORAGE_KEY,
       version: RIGHT_PANEL_STORAGE_VERSION,
-      storage: createJSONStorage(() =>
-        resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined),
-      ),
+      storage: createJSONStorage(() => {
+        adoptLegacyCodaRightPanelState();
+        return resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined);
+      }),
       partialize: (state) => ({ byThreadKey: state.byThreadKey }),
       migrate: migratePersistedRightPanelState,
     },

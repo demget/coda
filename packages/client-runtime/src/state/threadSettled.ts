@@ -297,7 +297,7 @@ export function effectiveSettled(
   }
   // An open PR is unfinished business regardless of how long the thread has
   // been quiet: review can take days, and hiding the thread would bury the
-  // work waiting on it. Only merge/close (above) or an explicit user settle
+  // work waiting on it. Only a merge (above) or an explicit user settle
   // resolves it.
   if (options.changeRequestState === "open") return false;
   if (options.autoSettleAfterDays === null) return false;
