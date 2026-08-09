@@ -51,7 +51,7 @@ describe("theme failure handling", () => {
       expect(error).toBeInstanceOf(ThemeStorageError);
       expect(error).toMatchObject({
         operation: "read",
-        storageKey: "coda:theme",
+        storageKey: "t3code:theme",
         cause: readCause,
       });
     }
@@ -63,11 +63,23 @@ describe("theme failure handling", () => {
       expect(error).toBeInstanceOf(ThemeStorageError);
       expect(error).toMatchObject({
         operation: "write",
-        storageKey: "coda:theme",
+        storageKey: "t3code:theme",
         theme: "dark",
         cause: writeCause,
       });
     }
+  });
+
+  it("reads the persisted T3 Chat theme preference", async () => {
+    vi.stubGlobal("window", {
+      localStorage: createStorage({
+        getItem: () => "t3-chat",
+      }),
+    });
+
+    const { readThemePreference } = await import("./useTheme");
+
+    expect(readThemePreference()).toBe("t3-chat");
   });
 
   it("falls back during initial theme application and logs only safe attributes", async () => {
@@ -90,10 +102,10 @@ describe("theme failure handling", () => {
     await expect(import("./useTheme")).resolves.toBeDefined();
 
     expect(errorLog).toHaveBeenCalledWith(
-      "Failed to read theme preference for coda:theme.",
+      "Failed to read theme preference for t3code:theme.",
       expect.objectContaining({
         operation: "read",
-        storageKey: "coda:theme",
+        storageKey: "t3code:theme",
         errorTag: "ThemeStorageError",
       }),
     );
@@ -104,9 +116,10 @@ describe("theme failure handling", () => {
 
   it("retries a failed storage read only after a relevant storage event", async () => {
     const cause = new Error("persistent storage failure");
-    const getItem = vi.fn(() => {
+    const themeGetItem = vi.fn((): string | null => {
       throw cause;
     });
+    const getItem = vi.fn((key: string) => (key === "t3code:theme" ? themeGetItem() : null));
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     let readSnapshot: (() => unknown) | undefined;
     let subscribeToTheme: ((listener: () => void) => () => void) | undefined;
@@ -141,14 +154,14 @@ describe("theme failure handling", () => {
     readSnapshot?.();
     readSnapshot?.();
 
-    expect(getItem).toHaveBeenCalledTimes(1);
+    expect(themeGetItem).toHaveBeenCalledTimes(1);
     expect(errorLog).toHaveBeenCalledTimes(1);
 
     const unsubscribe = subscribeToTheme?.(() => undefined);
-    storageHandler?.({ key: "coda:theme" } as StorageEvent);
+    storageHandler?.({ key: "t3code:theme" } as StorageEvent);
     readSnapshot?.();
 
-    expect(getItem).toHaveBeenCalledTimes(2);
+    expect(themeGetItem).toHaveBeenCalledTimes(2);
     expect(errorLog).toHaveBeenCalledTimes(2);
     unsubscribe?.();
   });

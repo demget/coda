@@ -52,6 +52,7 @@ import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "./ui/collapsi
 import { ScrollArea } from "./ui/scroll-area";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
 import { stackedThreadToast, toastManager } from "./ui/toast";
+import { recordVisitForThread } from "../browserHistoryStore";
 import { useOpenInPreferredEditor } from "../editorPreferences";
 import { resolveDiffThemeName, type DiffThemeName } from "../lib/diffRendering";
 import { fnv1a32 } from "../lib/diffRendering";
@@ -1349,7 +1350,10 @@ function ChatMarkdown({
           ),
         );
       }
-      return openUrlInPreview({ threadRef, url, openPreview });
+      return openUrlInPreview({ threadRef, url, openPreview }).then((result) => {
+        if (result._tag === "Success") recordVisitForThread(threadRef, url);
+        return result;
+      });
     },
     [openPreview, threadRef],
   );
@@ -1376,6 +1380,9 @@ function ChatMarkdown({
     },
     [createAssetUrl, openPreview, preparedConnection, threadRef],
   );
+  /* eslint-disable react/no-unstable-nested-components -- ReactMarkdown requires component
+   * renderers that close over this message's metadata. useMemo keeps them stable until that
+   * metadata changes. */
   const markdownComponents = useMemo<Components>(() => {
     /**
      * Path-shaped text only becomes a file chip once the environment confirms
@@ -1626,6 +1633,7 @@ function ChatMarkdown({
     text,
     threadRef,
   ]);
+  /* eslint-enable react/no-unstable-nested-components */
 
   return (
     <div
