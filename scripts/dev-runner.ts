@@ -788,10 +788,10 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
           // A shared origin serves a remote browser, where unbundled dev's
           // per-module requests each pay a tailnet round trip — a cold module
           // graph takes minutes to first paint. Bundled dev collapses that to
-          // a few chunk requests. Only defaulted, so T3CODE_BUNDLED_DEV=0
+          // a few chunk requests. Only defaulted, so CODA_BUNDLED_DEV=0
           // still opts a --share run back out.
-          if (env.T3CODE_BUNDLED_DEV === undefined) {
-            env.T3CODE_BUNDLED_DEV = "1";
+          if (env.CODA_BUNDLED_DEV === undefined) {
+            env.CODA_BUNDLED_DEV = "1";
           }
           yield* Effect.logInfo(`[dev-runner] shared on tailnet: ${shared.url}`);
         }

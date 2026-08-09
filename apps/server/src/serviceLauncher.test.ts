@@ -258,7 +258,7 @@ if (context.update?.status === "pending") {
 `;
       for (const version of ["1.0.0", "1.1.0"]) {
         const versionDir = path.join(root, "runtime", "versions", version);
-        const entryPath = path.join(versionDir, "node_modules", "t3", "dist", "bin.mjs");
+        const entryPath = path.join(versionDir, "node_modules", "coda", "dist", "bin.mjs");
         yield* fs.makeDirectory(path.dirname(entryPath), { recursive: true });
         yield* fs.writeFileString(entryPath, childSource);
         yield* fs.writeFileString(path.join(versionDir, ".install-complete"), `${version}\n`);

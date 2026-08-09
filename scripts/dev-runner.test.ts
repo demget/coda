@@ -1013,7 +1013,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
     // A shared origin means a remote browser, where unbundled dev's
     // per-module waterfall pays a tailnet round trip per import level. The
     // runner defaults bundled dev on for the spawned stack, but only
-    // defaults: an explicit T3CODE_BUNDLED_DEV (even "0") must pass through.
+    // defaults: an explicit CODA_BUNDLED_DEV (even "0") must pass through.
     describe("--share bundled dev default", () => {
       const shareSpawnedEnv = (input: { readonly ambientBundledDev: string | undefined }) =>
         Effect.gen(function* () {
@@ -1068,28 +1068,28 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
               HostProcessEnvironment,
               input.ambientBundledDev === undefined
                 ? {}
-                : { T3CODE_BUNDLED_DEV: input.ambientBundledDev },
+                : { CODA_BUNDLED_DEV: input.ambientBundledDev },
             ),
           );
 
           return captured;
         });
 
-      it.effect("defaults T3CODE_BUNDLED_DEV=1 for a shared run", () =>
+      it.effect("defaults CODA_BUNDLED_DEV=1 for a shared run", () =>
         Effect.gen(function* () {
           const env = yield* shareSpawnedEnv({ ambientBundledDev: undefined });
-          assert.equal(env?.T3CODE_BUNDLED_DEV, "1");
+          assert.equal(env?.CODA_BUNDLED_DEV, "1");
         }),
       );
 
-      it.effect("keeps an explicit T3CODE_BUNDLED_DEV=0 opt-out", () =>
+      it.effect("keeps an explicit CODA_BUNDLED_DEV=0 opt-out", () =>
         Effect.gen(function* () {
           const env = yield* shareSpawnedEnv({ ambientBundledDev: "0" });
-          assert.equal(env?.T3CODE_BUNDLED_DEV, "0");
+          assert.equal(env?.CODA_BUNDLED_DEV, "0");
         }),
       );
 
-      it.effect("leaves T3CODE_BUNDLED_DEV unset without --share", () =>
+      it.effect("leaves CODA_BUNDLED_DEV unset without --share", () =>
         Effect.gen(function* () {
           let captured: Record<string, string | undefined> | undefined;
           const spawnerLayer = Layer.succeed(
@@ -1114,7 +1114,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
             Effect.provideService(HostProcessEnvironment, {}),
           );
 
-          assert.equal(captured?.T3CODE_BUNDLED_DEV, undefined);
+          assert.equal(captured?.CODA_BUNDLED_DEV, undefined);
         }),
       );
     });
