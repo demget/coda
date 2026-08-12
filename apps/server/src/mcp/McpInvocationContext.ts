@@ -7,7 +7,7 @@ import {
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 
-export type McpCapability = "preview";
+export type McpCapability = "preview" | "thread";
 
 export interface McpInvocationScope {
   readonly environmentId: EnvironmentId;
@@ -23,9 +23,13 @@ export class McpInvocationContext extends Context.Service<
   McpInvocationScope
 >()("coda/mcp/McpInvocationContext") {}
 
-export const requireMcpCapability = Effect.fn("mcp.requireCapability")(function* (
-  capability: McpCapability,
-) {
+/**
+ * Preview's capability gate. Each toolkit raises its own error type — a thread
+ * read that fails should not report a preview automation failure — so this one
+ * is typed to the single capability whose error it constructs.
+ */
+export const requirePreviewCapability = Effect.fn("mcp.requirePreviewCapability")(function* () {
+  const capability = "preview" as const;
   const invocation = yield* McpInvocationContext;
   if (!invocation.capabilities.has(capability)) {
     return yield* new PreviewAutomationUnavailableError({

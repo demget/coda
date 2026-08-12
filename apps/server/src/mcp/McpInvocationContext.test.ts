@@ -20,7 +20,7 @@ it.effect("reports the scoped credential context when preview capability is unav
   };
 
   return Effect.gen(function* () {
-    const error = yield* McpInvocationContext.requireMcpCapability("preview").pipe(
+    const error = yield* McpInvocationContext.requirePreviewCapability().pipe(
       Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
       Effect.flip,
     );
