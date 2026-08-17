@@ -1,13 +1,15 @@
 name: Release Coda Desktop
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - .coda-upstream/upstream.json
-      - .github/workflows/downstream-desktop-release.yml
+  schedule:
+    - cron: "0 */3 * * *"
   workflow_dispatch:
+    inputs:
+      force:
+        description: Release even when main has not moved since the last release
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: downstream-desktop-release
@@ -24,9 +26,9 @@ jobs:
     permissions:
       contents: read
     outputs:
-      already_published: ${{ steps.metadata.outputs.already_published }}
       official_tag: ${{ steps.metadata.outputs.official_tag }}
       sha: ${{ steps.metadata.outputs.sha }}
+      should_release: ${{ steps.metadata.outputs.should_release }}
       tag: ${{ steps.metadata.outputs.tag }}
       version: ${{ steps.metadata.outputs.version }}
     steps:
@@ -37,32 +39,67 @@ jobs:
           fetch-depth: 0
 
       - id: metadata
-        name: Validate release metadata
+        name: Resolve release metadata
         shell: bash
         env:
+          FORCE: ${{ github.event.inputs.force }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          version="$(jq -er .version .coda-upstream/upstream.json)"
+          snapshot="$(jq -er .version .coda-upstream/upstream.json)"
           official_tag="$(jq -er .nightlyTag .coda-upstream/upstream.json)"
           source_sha="$(git rev-parse HEAD)"
-          tag="v$version"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+\.coda\.[0-9]+\.[0-9]+$ ]]
+          [[ "$snapshot" =~ ^[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+\.coda\.[0-9]+\.[0-9]+$ ]]
           [[ "$official_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$ ]]
+
+          # The recorded snapshot only moves when an upstream sync lands, so it
+          # cannot identify a release built from our own commits. Append this
+          # run's number the way the official Release workflow stamps a nightly,
+          # which keeps every build newer than the last one for the updater
+          # while the snapshot still names the sync it came from.
+          version="$snapshot.$GITHUB_RUN_NUMBER"
+          tag="v$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "official_tag=$official_tag" >> "$GITHUB_OUTPUT"
           echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "already_published=true" >> "$GITHUB_OUTPUT"
+            echo "Release $tag already exists. Skipping." >&2
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${FORCE:-}" == "true" ]]; then
+            echo "Forced release requested. Proceeding."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # --count caps the output at the source; piping through `head` would
+          # break this step under `pipefail` once enough tags exist to fill the
+          # pipe buffer before `head` closes it.
+          last_tag="$(git for-each-ref --count=1 --sort=-creatordate \
+            --format='%(refname:short)' 'refs/tags/v*-nightly.*')"
+          if [[ -z "$last_tag" ]]; then
+            echo "No previous release tag found. Proceeding."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          last_sha="$(git rev-parse "$last_tag^{commit}")"
+          if [[ "$last_sha" == "$source_sha" ]]; then
+            echo "No changes on main since $last_tag. Skipping."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
           else
-            echo "already_published=false" >> "$GITHUB_OUTPUT"
+            echo "Changes detected since $last_tag ($last_sha → $source_sha). Proceeding."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
           fi
 
   validate:
     name: Validate release source
     needs: source
-    if: needs.source.outputs.already_published == 'false'
+    if: needs.source.outputs.should_release == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -110,7 +147,7 @@ jobs:
   build_wsl_node_pty:
     name: Build WSL node-pty
     needs: [source, validate]
-    if: needs.source.outputs.already_published == 'false' && needs.validate.result == 'success'
+    if: needs.source.outputs.should_release == 'true' && needs.validate.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -155,7 +192,7 @@ jobs:
   build_desktop:
     name: Build ${{ matrix.label }}
     needs: [source, build_wsl_node_pty]
-    if: needs.source.outputs.already_published == 'false' && needs.build_wsl_node_pty.result == 'success'
+    if: needs.source.outputs.should_release == 'true' && needs.build_wsl_node_pty.result == 'success'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
@@ -279,7 +316,7 @@ jobs:
   publish:
     name: Publish desktop release
     needs: [source, build_desktop]
-    if: needs.source.outputs.already_published == 'false' && needs.build_desktop.result == 'success'
+    if: needs.source.outputs.should_release == 'true' && needs.build_desktop.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -306,7 +343,7 @@ jobs:
           test -f "$RUNNER_TEMP/release-assets/nightly-mac.yml"
           compgen -G "$RUNNER_TEMP/release-assets/*.exe" >/dev/null
           compgen -G "$RUNNER_TEMP/release-assets/*.dmg" >/dev/null
-          notes="Coda desktop release synced through official $OFFICIAL_TAG. macOS arm64 and Windows x64 builds are unsigned."
+          notes="Coda desktop built from ${RELEASE_SHA:0:7}, synced through official $OFFICIAL_TAG. macOS arm64 and Windows x64 builds are unsigned, so install the DMG or EXE by hand."
           gh release create "$RELEASE_TAG" "$RUNNER_TEMP"/release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$RELEASE_SHA" \
