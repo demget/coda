@@ -118,8 +118,12 @@ interface PendingApproval {
   readonly kind: string | "unknown";
 }
 
+type PendingUserInputResolution =
+  | { readonly _tag: "answered"; readonly answers: ProviderUserInputAnswers }
+  | { readonly _tag: "cancelled" };
+
 interface PendingUserInput {
-  readonly answers: Deferred.Deferred<ProviderUserInputAnswers>;
+  readonly resolution: Deferred.Deferred<PendingUserInputResolution>;
 }
 
 interface CursorSessionContext {
@@ -153,13 +157,13 @@ function settlePendingApprovalsAsCancelled(
   );
 }
 
-function settlePendingUserInputsAsEmptyAnswers(
+function settlePendingUserInputsAsCancelled(
   pendingUserInputs: ReadonlyMap<ApprovalRequestId, PendingUserInput>,
 ): Effect.Effect<void> {
   const pendingEntries = Array.from(pendingUserInputs.values());
   return Effect.forEach(
     pendingEntries,
-    (pending) => Deferred.succeed(pending.answers, {}).pipe(Effect.ignore),
+    (pending) => Deferred.succeed(pending.resolution, { _tag: "cancelled" }).pipe(Effect.ignore),
     {
       discard: true,
     },
@@ -461,7 +465,7 @@ export function makeCursorAdapter(
         if (ctx.stopped) return;
         ctx.stopped = true;
         yield* settlePendingApprovalsAsCancelled(ctx.pendingApprovals);
-        yield* settlePendingUserInputsAsEmptyAnswers(ctx.pendingUserInputs);
+        yield* settlePendingUserInputsAsCancelled(ctx.pendingUserInputs);
         if (ctx.notificationFiber) {
           yield* Fiber.interrupt(ctx.notificationFiber);
         }
@@ -582,8 +586,8 @@ export function makeCursorAdapter(
                   );
                   const requestId = ApprovalRequestId.make(yield* randomUUIDv4);
                   const runtimeRequestId = RuntimeRequestId.make(requestId);
-                  const answers = yield* Deferred.make<ProviderUserInputAnswers>();
-                  pendingUserInputs.set(requestId, { answers });
+                  const resolution = yield* Deferred.make<PendingUserInputResolution>();
+                  pendingUserInputs.set(requestId, { resolution });
                   yield* offerRuntimeEvent({
                     type: "user-input.requested",
                     ...(yield* makeEventStamp()),
@@ -598,7 +602,7 @@ export function makeCursorAdapter(
                       payload: params,
                     },
                   });
-                  const resolved = yield* Deferred.await(answers);
+                  const resolved = yield* Deferred.await(resolution);
                   pendingUserInputs.delete(requestId);
                   yield* offerRuntimeEvent({
                     type: "user-input.resolved",
@@ -607,9 +611,20 @@ export function makeCursorAdapter(
                     threadId: input.threadId,
                     turnId: ctx?.activeTurnId,
                     requestId: runtimeRequestId,
-                    payload: { answers: resolved },
+                    payload: { answers: resolved._tag === "answered" ? resolved.answers : {} },
                   });
-                  return { answers: resolved };
+                  // A stopped or interrupted turn must not answer the question:
+                  // a successful (even empty) response tells cursor-agent to
+                  // keep working. Failing the extension request surfaces a
+                  // JSON-RPC error alongside the session/cancel notification.
+                  if (resolved._tag === "cancelled") {
+                    return yield* new EffectAcpErrors.AcpTransportError({
+                      method: "cursor/ask_question",
+                      detail: "Cursor ask_question request was cancelled by an interrupt.",
+                      cause: undefined,
+                    });
+                  }
+                  return { answers: resolved.answers };
                 }),
               ),
             );
@@ -1061,8 +1076,9 @@ export function makeCursorAdapter(
     const interruptTurn: CursorAdapterShape["interruptTurn"] = (threadId) =>
       Effect.gen(function* () {
         const ctx = yield* requireSession(threadId);
-        yield* settlePendingApprovalsAsCancelled(ctx.pendingApprovals);
-        yield* settlePendingUserInputsAsEmptyAnswers(ctx.pendingUserInputs);
+        // Send session/cancel before settling pending requests so the agent
+        // knows the turn is cancelled when it sees their resolutions (per the
+        // ACP cancellation guidance) instead of reading them as fresh input.
         yield* Effect.ignore(
           ctx.acp.cancel.pipe(
             Effect.mapError((error) =>
@@ -1070,6 +1086,8 @@ export function makeCursorAdapter(
             ),
           ),
         );
+        yield* settlePendingApprovalsAsCancelled(ctx.pendingApprovals);
+        yield* settlePendingUserInputsAsCancelled(ctx.pendingUserInputs);
       });
 
     const respondToRequest: CursorAdapterShape["respondToRequest"] = (
@@ -1105,7 +1123,7 @@ export function makeCursorAdapter(
             detail: `Unknown pending user-input request: ${requestId}`,
           });
         }
-        yield* Deferred.succeed(pending.answers, answers);
+        yield* Deferred.succeed(pending.resolution, { _tag: "answered", answers });
       });
 
     const readThread: CursorAdapterShape["readThread"] = (threadId) =>
