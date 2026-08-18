@@ -96,6 +96,9 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
             sessionId: "session-1",
           },
         });
+        // A JSON-RPC message with an `id` is a request, not a notification —
+        // peers must never see one on a notification method.
+        assert.notInclude(outbound, '"id"');
 
         yield* Queue.offer(
           input,
@@ -199,20 +202,18 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
           direction: "outgoing",
           stage: "decoded",
           payload: {
-            _tag: "Request",
-            id: "",
-            tag: "session/cancel",
-            payload: {
+            jsonrpc: "2.0",
+            method: "session/cancel",
+            params: {
               sessionId: "session-1",
             },
-            headers: [],
           },
         },
         {
           direction: "outgoing",
           stage: "raw",
           payload:
-            '{"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"session-1"},"id":"","headers":[]}\n',
+            '{"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"session-1"}}\n',
         },
       ]);
     }),
