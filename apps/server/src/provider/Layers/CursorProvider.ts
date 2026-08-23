@@ -8,6 +8,7 @@ import type {
   ServerProviderModel,
   ServerProviderState,
 } from "@t3tools/contracts";
+import * as EffectAcpClient from "effect-acp/client";
 import type * as EffectAcpSchema from "effect-acp/schema";
 import { causeErrorTag } from "@t3tools/shared/observability";
 import * as Crypto from "effect/Crypto";
@@ -44,7 +45,6 @@ import {
   enrichProviderSnapshotWithVersionAdvisory,
   type ProviderMaintenanceCapabilities,
 } from "../providerMaintenance.ts";
-import * as AcpSessionRuntime from "../acp/AcpSessionRuntime.ts";
 import { CursorListAvailableModelsResponse } from "../acp/CursorAcpExtension.ts";
 
 const decodeCursorListAvailableModelsResponse = Schema.decodeUnknownEffect(
@@ -400,43 +400,54 @@ function buildCursorDiscoveredModelsFromAvailableModelsResponse(
   );
 }
 
-const makeCursorAcpProbeRuntime = (
+/**
+ * Runs `useClient` against a throwaway `cursor-agent acp` process that has
+ * completed the ACP handshake, then tears the process down.
+ *
+ * The probe deliberately stops at `initialize` + `authenticate` instead of
+ * opening a session. `cursor/list_available_models` is session independent, and
+ * `session/new` is both the slowest leg of the handshake and a write: the
+ * Cursor CLI persists every session it creates, so opening one per provider
+ * refresh accumulates empty sessions in the user's Cursor state forever.
+ */
+const withCursorAcpProbeClient = <A, E, R>(
   cursorSettings: CursorSettings,
+  useClient: (client: EffectAcpClient.AcpClient["Service"]) => Effect.Effect<A, E, R>,
   environment?: NodeJS.ProcessEnv,
 ) =>
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-    const acpContext = yield* Layer.build(
-      AcpSessionRuntime.layer({
-        spawn: {
-          command: cursorSettings.binaryPath,
-          args: [
-            ...(cursorSettings.apiEndpoint ? (["-e", cursorSettings.apiEndpoint] as const) : []),
-            "acp",
-          ],
-          cwd: process.cwd(),
-          ...(environment ? { env: environment } : {}),
-        },
+    const spawnEnvironment = environment ? { env: environment, extendEnv: true } : {};
+    const spawnCommand = yield* resolveSpawnCommand(
+      cursorSettings.binaryPath,
+      [...(cursorSettings.apiEndpoint ? (["-e", cursorSettings.apiEndpoint] as const) : []), "acp"],
+      spawnEnvironment,
+    );
+    const child = yield* spawner.spawn(
+      ChildProcess.make(spawnCommand.command, spawnCommand.args, {
         cwd: process.cwd(),
-        clientInfo: { name: "t3-code-provider-probe", version: "0.0.0" },
-        authMethodId: "cursor_login",
-        clientCapabilities: CURSOR_PARAMETERIZED_MODEL_PICKER_CAPABILITIES,
-      }).pipe(Layer.provide(Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner))),
+        ...spawnEnvironment,
+        shell: spawnCommand.shell,
+      }),
     );
-    return yield* Effect.service(AcpSessionRuntime.AcpSessionRuntime).pipe(
-      Effect.provide(acpContext),
+    const clientContext = yield* Layer.build(EffectAcpClient.layerChildProcess(child));
+    const client = yield* Effect.service(EffectAcpClient.AcpClient).pipe(
+      Effect.provide(clientContext),
     );
-  });
 
-const withCursorAcpProbeRuntime = <A, E, R>(
-  cursorSettings: CursorSettings,
-  useRuntime: (acp: AcpSessionRuntime.AcpSessionRuntime["Service"]) => Effect.Effect<A, E, R>,
-  environment?: NodeJS.ProcessEnv,
-) =>
-  makeCursorAcpProbeRuntime(cursorSettings, environment).pipe(
-    Effect.flatMap(useRuntime),
-    Effect.scoped,
-  );
+    yield* client.agent.initialize({
+      protocolVersion: 1,
+      clientCapabilities: {
+        fs: { readTextFile: false, writeTextFile: false },
+        terminal: false,
+        ...CURSOR_PARAMETERIZED_MODEL_PICKER_CAPABILITIES,
+      },
+      clientInfo: { name: "t3-code-provider-probe", version: "0.0.0" },
+    });
+    yield* client.agent.authenticate({ methodId: "cursor_login" });
+
+    return yield* useClient(client);
+  }).pipe(Effect.scoped);
 
 function normalizeCursorConfigOptionToken(value: string | null | undefined): string {
   return (
@@ -554,15 +565,15 @@ const discoverCursorModelsViaListAvailableModels = (
   cursorSettings: CursorSettings,
   environment?: NodeJS.ProcessEnv,
 ) =>
-  withCursorAcpProbeRuntime(
+  withCursorAcpProbeClient(
     cursorSettings,
-    (acp) =>
-      Effect.gen(function* () {
-        yield* acp.start();
-        const response = yield* acp.request("cursor/list_available_models", {});
-        const decoded = yield* decodeCursorListAvailableModelsResponse(response);
-        return buildCursorDiscoveredModelsFromAvailableModelsResponse(decoded);
-      }),
+    (client) =>
+      client.raw
+        .request("cursor/list_available_models", {})
+        .pipe(
+          Effect.flatMap(decodeCursorListAvailableModelsResponse),
+          Effect.map(buildCursorDiscoveredModelsFromAvailableModelsResponse),
+        ),
     environment,
   );
 
