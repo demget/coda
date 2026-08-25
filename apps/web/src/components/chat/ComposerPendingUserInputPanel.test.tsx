@@ -42,5 +42,6 @@ describe("ComposerPendingUserInputPanel", () => {
     expect(markup).toMatch(/aria-controls="([^"]+)"/);
     expect(markup).toMatch(/<div id="[^"]+"><p class="text-sm/);
     expect(markup).not.toContain('hidden=""');
+    expect(markup).not.toContain("rotate-180");
   });
 });
