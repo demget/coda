@@ -191,7 +191,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
           <ChevronDownIcon
             className={cn(
               "size-4 transition-transform duration-200 ease-out",
-              !isCollapsed && "rotate-180",
+              isCollapsed && "rotate-180",
             )}
           />
         </button>
