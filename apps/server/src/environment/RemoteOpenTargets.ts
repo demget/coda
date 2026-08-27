@@ -14,7 +14,9 @@ import * as NetService from "@t3tools/shared/Net";
 import { readTailscaleStatus } from "@t3tools/tailscale";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 
 const SSH_PORT = 22;
@@ -28,6 +30,8 @@ export class RemoteOpenTargets extends Context.Service<
 
 export const make = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const httpClient = yield* HttpClient.HttpClient;
   const net = yield* NetService.NetService;
 
   const resolveTargets = Effect.gen(function* () {
@@ -50,6 +54,8 @@ export const make = Effect.gen(function* () {
       Effect.map((status) => status.magicDnsName),
       Effect.orElseSucceed(() => null),
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(HttpClient.HttpClient, httpClient),
     );
     if (magicDnsName !== null) {
       targets.push({ kind: "tailscale", host: magicDnsName });

@@ -361,12 +361,14 @@ describe("tailscale", () => {
     // inside an `Effect.callback` registration, so that throw arrives as a
     // defect rather than a typed error - the shape reproduced here.
     const defect = Object.assign(new Error("spawn tailscale ENOTDIR"), { code: "ENOTDIR" });
-    const layer = Layer.succeed(
-      ChildProcessSpawner.ChildProcessSpawner,
-      ChildProcessSpawner.make(() =>
-        Effect.callback<never, never>(() => {
-          throw defect;
-        }),
+    const layer = cliTestLayer(
+      Layer.succeed(
+        ChildProcessSpawner.ChildProcessSpawner,
+        ChildProcessSpawner.make(() =>
+          Effect.callback<never, never>(() => {
+            throw defect;
+          }),
+        ),
       ),
     );
 

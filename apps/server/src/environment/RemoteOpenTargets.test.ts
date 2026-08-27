@@ -1,10 +1,12 @@
 import { it } from "@effect/vitest";
-import { HostProcessHostname } from "@t3tools/shared/hostProcess";
+import { HostProcessHostname, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as NetService from "@t3tools/shared/Net";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
+import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { describe, expect } from "vite-plus/test";
 
@@ -55,9 +57,20 @@ const resolveTargets = (input: {
 }) =>
   Effect.flatMap(RemoteOpenTargets.RemoteOpenTargets, (service) => service.resolveTargets()).pipe(
     Effect.provideService(HostProcessHostname, input.hostname),
+    Effect.provideService(HostProcessPlatform, "linux"),
     Effect.provide(
       RemoteOpenTargets.layer.pipe(
-        Layer.provide(Layer.mergeAll(netLayer(input.sshd), spawnerLayer(input.tailscale))),
+        Layer.provide(
+          Layer.mergeAll(
+            netLayer(input.sshd),
+            spawnerLayer(input.tailscale),
+            FileSystem.layerNoop({}),
+            Layer.succeed(
+              HttpClient.HttpClient,
+              HttpClient.make(() => Effect.die("unexpected Tailscale local API request")),
+            ),
+          ),
+        ),
       ),
     ),
   );

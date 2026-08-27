@@ -17,6 +17,7 @@ import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
+import { FetchHttpClient } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
 import {
@@ -73,7 +74,7 @@ const devServerInput = {
   runArgs: ["--inspect", "secret-token-value"],
 } as const;
 
-it.layer(NodeServices.layer)("dev-runner", (it) => {
+it.layer(Layer.mergeAll(NodeServices.layer, FetchHttpClient.layer))("dev-runner", (it) => {
   describe("getDevRunnerModeArgs", () => {
     it.effect("lets Vite+ honor the desktop dev task graph", () =>
       Effect.sync(() => {

@@ -17,6 +17,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { Argument, Command, Flag } from "effect/unstable/cli";
+import { FetchHttpClient } from "effect/unstable/http";
 import { ChildProcess } from "effect/unstable/process";
 
 import { type DevShareError, shareDevServer, unshareDevServer } from "./lib/dev-share.ts";
@@ -916,6 +917,7 @@ const cliRuntimeLayer = Layer.mergeAll(
   Logger.layer([Logger.consolePretty()]),
   NodeServices.layer,
   NetService.layer,
+  FetchHttpClient.layer,
 );
 
 if (import.meta.main) {
