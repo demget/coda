@@ -18,11 +18,13 @@ import {
   disableTailscaleServe,
   ensureTailscaleServe,
   readTailscaleStatus,
-  type TailscaleCommandError,
+  type TailscaleError,
   type TailscaleStderrDiagnostic,
 } from "@t3tools/tailscale";
 import * as Effect from "effect/Effect";
+import type * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
+import type { HttpClient } from "effect/unstable/http";
 import type { ChildProcessSpawner } from "effect/unstable/process";
 
 /**
@@ -41,7 +43,7 @@ const DIAGNOSTIC_EXPLANATIONS: Record<TailscaleStderrDiagnostic, string | undefi
  * Our own wording for why a tailscale command failed, derived from the
  * classified diagnostic. Never the CLI's text — see `stderrDiagnosticOf`.
  */
-const explainCommandFailure = (error: TailscaleCommandError): string | undefined =>
+const explainCommandFailure = (error: TailscaleError): string | undefined =>
   error._tag === "TailscaleCommandExitError" && error.stderrDiagnostic !== undefined
     ? (DIAGNOSTIC_EXPLANATIONS[error.stderrDiagnostic] ?? "run the command by hand to see why")
     : undefined;
@@ -133,14 +135,14 @@ export const unshareDevServer = (
     readonly explanation?: string | undefined;
     // Kept structured so a caller wrapping this can preserve the real error
     // chain rather than a flattened string.
-    readonly cause?: TailscaleCommandError | undefined;
+    readonly cause?: TailscaleError | undefined;
   },
   never,
-  ChildProcessSpawner.ChildProcessSpawner
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | HttpClient.HttpClient
 > =>
   disableTailscaleServe({ servePort: webPort }).pipe(
     Effect.as({ cleared: true } as const),
-    Effect.catch((error: TailscaleCommandError) =>
+    Effect.catch((error: TailscaleError) =>
       Effect.succeed(
         // "Nothing was mapped" leaves the port clear either way.
         error._tag === "TailscaleCommandExitError" &&

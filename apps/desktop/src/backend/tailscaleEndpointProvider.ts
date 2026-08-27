@@ -8,6 +8,7 @@ import {
   readTailscaleStatus,
 } from "@t3tools/tailscale";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
@@ -108,13 +109,13 @@ export const resolveTailscaleAdvertisedEndpoints = Effect.fn("resolveTailscaleAd
     readonly readMagicDnsName?: Effect.Effect<
       string | null,
       never,
-      ChildProcessSpawner.ChildProcessSpawner
+      ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | HttpClient.HttpClient
     >;
     readonly probe?: (baseUrl: string) => Effect.Effect<boolean, never, HttpClient.HttpClient>;
   }): Effect.fn.Return<
     readonly AdvertisedEndpoint[],
     never,
-    ChildProcessSpawner.ChildProcessSpawner | HttpClient.HttpClient
+    ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | HttpClient.HttpClient
   > {
     const ipEndpoints = resolveTailscaleIpAdvertisedEndpoints(input);
     const readDnsName =

@@ -1,12 +1,15 @@
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as PlatformError from "effect/PlatformError";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
 import {
@@ -21,6 +24,7 @@ import {
   TailscaleCommandExitError,
   TailscaleCommandSpawnError,
   TailscaleCommandTimeoutError,
+  TailscaleLocalApiError,
   TailscaleStatusParseError,
 } from "./tailscale.ts";
 
@@ -104,16 +108,94 @@ function mockSpawnerLayer(
     args: ReadonlyArray<string>,
   ) => { stdout?: string; stderr?: string; code?: number },
 ) {
-  return Layer.succeed(
-    ChildProcessSpawner.ChildProcessSpawner,
-    ChildProcessSpawner.make((command) => {
-      const childProcess = command as unknown as {
-        readonly command: string;
-        readonly args: ReadonlyArray<string>;
-      };
-      return Effect.succeed(mockHandle(handler(childProcess.command, childProcess.args)));
-    }),
+  return cliTestLayer(
+    Layer.succeed(
+      ChildProcessSpawner.ChildProcessSpawner,
+      ChildProcessSpawner.make((command) => {
+        const childProcess = command as unknown as {
+          readonly command: string;
+          readonly args: ReadonlyArray<string>;
+        };
+        return Effect.succeed(mockHandle(handler(childProcess.command, childProcess.args)));
+      }),
+    ),
   );
+}
+
+const cliTestLayer = <E, R>(
+  spawnerLayer: Layer.Layer<ChildProcessSpawner.ChildProcessSpawner, E, R>,
+) =>
+  Layer.mergeAll(
+    spawnerLayer,
+    Layer.succeed(HostProcessPlatform, "linux"),
+    Layer.succeed(FileSystem.FileSystem, FileSystem.makeNoop({})),
+    Layer.succeed(
+      HttpClient.HttpClient,
+      HttpClient.make(() => Effect.die("unexpected Tailscale local API request")),
+    ),
+  );
+
+const localApiToken = "local-api-test-token";
+
+function macosTestLayer(
+  handler: (request: HttpClientRequest.HttpClientRequest) => Response,
+  options: {
+    readonly fileSystem?: FileSystem.FileSystem;
+    readonly spawn?: (
+      command: string,
+      args: ReadonlyArray<string>,
+    ) => ReturnType<typeof mockHandle>;
+  } = {},
+) {
+  const fileSystem =
+    options.fileSystem ??
+    FileSystem.makeNoop({
+      readLink: (path) =>
+        Effect.sync(() => {
+          assert.equal(path, "/Library/Tailscale/ipnport");
+          return "59085";
+        }),
+      readFileString: (path) =>
+        Effect.sync(() => {
+          assert.equal(path, "/Library/Tailscale/sameuserproof-59085");
+          return localApiToken;
+        }),
+    });
+
+  return Layer.mergeAll(
+    Layer.succeed(HostProcessPlatform, "darwin"),
+    Layer.succeed(FileSystem.FileSystem, fileSystem),
+    Layer.succeed(
+      ChildProcessSpawner.ChildProcessSpawner,
+      ChildProcessSpawner.make((command) => {
+        const childProcess = command as unknown as {
+          readonly command: string;
+          readonly args: ReadonlyArray<string>;
+        };
+        return options.spawn
+          ? Effect.succeed(options.spawn(childProcess.command, childProcess.args))
+          : Effect.die(`unexpected process spawn: ${childProcess.command}`);
+      }),
+    ),
+    Layer.succeed(
+      HttpClient.HttpClient,
+      HttpClient.make((request) =>
+        Effect.sync(() => HttpClientResponse.fromWeb(request, handler(request))),
+      ),
+    ),
+  );
+}
+
+function requestJsonBody(
+  request: HttpClientRequest.HttpClientRequest,
+): Readonly<Record<string, unknown>> {
+  assert.equal(request.body._tag, "Uint8Array");
+  if (request.body._tag !== "Uint8Array") {
+    return {};
+  }
+  return JSON.parse(new TextDecoder().decode(request.body.body)) as Readonly<
+    Record<string, unknown>
+  >;
 }
 
 describe("tailscale", () => {
@@ -186,6 +268,65 @@ describe("tailscale", () => {
     });
   });
 
+  it.effect("reads macOS status through the local API without starting Tailscale.app", () => {
+    const layer = macosTestLayer((request) => {
+      assert.equal(request.method, "GET");
+      assert.equal(request.url, "http://127.0.0.1:59085/localapi/v0/status?peers=false");
+      assert.equal(
+        request.headers.authorization,
+        `Basic ${Buffer.from(`:${localApiToken}`).toString("base64")}`,
+      );
+      return new Response(tailscaleStatusWithSingleIpJson);
+    });
+
+    return Effect.gen(function* () {
+      const status = yield* readTailscaleStatus.pipe(Effect.provide(layer));
+      assert.deepEqual(status, {
+        magicDnsName: "desktop.tail.ts.net",
+        tailnetIpv4Addresses: ["100.90.1.2"],
+      });
+    });
+  });
+
+  it.effect("discovers the Mac App Store local API credential through lsof", () => {
+    const missingSharedDirectory = FileSystem.makeNoop({
+      readLink: (path) =>
+        Effect.fail(
+          PlatformError.systemError({
+            _tag: "NotFound",
+            module: "FileSystem",
+            method: "readLink",
+            pathOrDescriptor: path,
+          }),
+        ),
+    });
+    const layer = macosTestLayer(
+      (request) => {
+        assert.equal(request.url, "http://127.0.0.1:59086/localapi/v0/status?peers=false");
+        return new Response(tailscaleStatusWithSingleIpJson);
+      },
+      {
+        fileSystem: missingSharedDirectory,
+        spawn: (command, args) => {
+          assert.equal(command, "/usr/sbin/lsof");
+          assert.include(args, "-c");
+          assert.include(args, "IPNExtension");
+          return mockHandle({
+            stdout:
+              "p1234\nn/Users/test/Library/Containers/io.tailscale.ipn.macos/sameuserproof-59086-local-api-test-token\n",
+          });
+        },
+      },
+    );
+
+    return readTailscaleStatus.pipe(
+      Effect.tap((status) =>
+        Effect.sync(() => assert.equal(status.magicDnsName, "desktop.tail.ts.net")),
+      ),
+      Effect.provide(layer),
+    );
+  });
+
   it.effect("preserves tailscale spawn failures as causes", () => {
     const systemCause = new Error("private executable lookup detail");
     const cause = PlatformError.systemError({
@@ -194,9 +335,11 @@ describe("tailscale", () => {
       method: "spawn",
       cause: systemCause,
     });
-    const layer = Layer.succeed(
-      ChildProcessSpawner.ChildProcessSpawner,
-      ChildProcessSpawner.make(() => Effect.fail(cause)),
+    const layer = cliTestLayer(
+      Layer.succeed(
+        ChildProcessSpawner.ChildProcessSpawner,
+        ChildProcessSpawner.make(() => Effect.fail(cause)),
+      ),
     );
 
     return Effect.gen(function* () {
@@ -297,9 +440,11 @@ describe("tailscale", () => {
   it.effect("times out tailscale status through TestClock", () => {
     const layer = Layer.merge(
       TestClock.layer(),
-      Layer.succeed(
-        ChildProcessSpawner.ChildProcessSpawner,
-        ChildProcessSpawner.make(() => Effect.succeed(neverFinishingMockHandle())),
+      cliTestLayer(
+        Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make(() => Effect.succeed(neverFinishingMockHandle())),
+        ),
       ),
     );
 
@@ -327,6 +472,51 @@ describe("tailscale", () => {
     });
 
     return ensureTailscaleServe({ localPort: 13773, servePort: 8443 }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("configures macOS Serve through the local API and preserves unrelated mappings", () => {
+    const initialConfig = {
+      TCP: { "22": { TCPForward: "127.0.0.1:22" } },
+      Web: {
+        "other.tail.ts.net:443": {
+          Handlers: { "/docs": { Proxy: "http://127.0.0.1:9000" } },
+        },
+      },
+      AllowFunnel: { "other.tail.ts.net:443": true },
+      Services: { "svc:test": { TCP: 5432 } },
+    };
+    let postedConfig: Readonly<Record<string, unknown>> | undefined;
+    const layer = macosTestLayer((request) => {
+      if (request.url.endsWith("/status?peers=false")) {
+        return new Response(tailscaleStatusJson);
+      }
+      if (request.method === "GET") {
+        return new Response(JSON.stringify(initialConfig), { headers: { ETag: "revision-1" } });
+      }
+      assert.equal(request.method, "POST");
+      assert.equal(request.headers["if-match"], "revision-1");
+      postedConfig = requestJsonBody(request);
+      return new Response(null, { status: 200 });
+    });
+
+    return Effect.gen(function* () {
+      yield* ensureTailscaleServe({ localPort: 13773, servePort: 8443 }).pipe(
+        Effect.provide(layer),
+      );
+      assert.deepEqual(postedConfig, {
+        ...initialConfig,
+        TCP: {
+          ...initialConfig.TCP,
+          "8443": { HTTPS: true },
+        },
+        Web: {
+          ...initialConfig.Web,
+          "desktop.tail.ts.net:8443": {
+            Handlers: { "/": { Proxy: "http://127.0.0.1:13773" } },
+          },
+        },
+      });
+    });
   });
 
   it.effect("retains tailscale serve exit diagnostics", () => {
@@ -374,6 +564,76 @@ describe("tailscale", () => {
       assert.deepEqual(commands, [
         { command: "tailscale", args: ["serve", "--https=8443", "off"] },
       ]);
+    });
+  });
+
+  it.effect("disables only the target macOS Serve mapping through the local API", () => {
+    const initialConfig = {
+      TCP: {
+        "22": { TCPForward: "127.0.0.1:22" },
+        "8443": { HTTPS: true },
+      },
+      Web: {
+        "desktop.tail.ts.net:8443": {
+          Handlers: { "/": { Proxy: "http://127.0.0.1:13773" } },
+        },
+        "other.tail.ts.net:443": {
+          Handlers: { "/docs": { Proxy: "http://127.0.0.1:9000" } },
+        },
+      },
+      AllowFunnel: {
+        "desktop.tail.ts.net:8443": true,
+        "other.tail.ts.net:443": true,
+      },
+      Services: { "svc:test": { TCP: 5432 } },
+    };
+    let postedConfig: Readonly<Record<string, unknown>> | undefined;
+    const layer = macosTestLayer((request) => {
+      if (request.url.endsWith("/status?peers=false")) {
+        return new Response(tailscaleStatusJson);
+      }
+      if (request.method === "GET") {
+        return new Response(JSON.stringify(initialConfig), { headers: { ETag: "revision-2" } });
+      }
+      assert.equal(request.headers["if-match"], "revision-2");
+      postedConfig = requestJsonBody(request);
+      return new Response(null, { status: 200 });
+    });
+
+    return Effect.gen(function* () {
+      yield* disableTailscaleServe({ servePort: 8443 }).pipe(Effect.provide(layer));
+      assert.deepEqual(postedConfig, {
+        TCP: { "22": { TCPForward: "127.0.0.1:22" } },
+        Web: {
+          "other.tail.ts.net:443": {
+            Handlers: { "/docs": { Proxy: "http://127.0.0.1:9000" } },
+          },
+        },
+        AllowFunnel: { "other.tail.ts.net:443": true },
+        Services: initialConfig.Services,
+      });
+    });
+  });
+
+  it.effect("keeps macOS local API credentials out of update failures", () => {
+    const layer = macosTestLayer((request) => {
+      if (request.url.endsWith("/status?peers=false")) {
+        return new Response(tailscaleStatusJson);
+      }
+      if (request.method === "GET") {
+        return new Response("null", { headers: { ETag: "revision-3" } });
+      }
+      return new Response(null, { status: 412 });
+    });
+
+    return Effect.gen(function* () {
+      const error = yield* ensureTailscaleServe({ localPort: 13773 }).pipe(
+        Effect.flip,
+        Effect.provide(layer),
+      );
+      assert.instanceOf(error, TailscaleLocalApiError);
+      assert.equal(error.reason, "concurrent-update");
+      assertCarriesNoSecret(error, localApiToken);
     });
   });
 });

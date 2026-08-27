@@ -13,6 +13,7 @@ import { readTailscaleStatus } from "@t3tools/tailscale";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
@@ -408,18 +409,21 @@ export const make = Effect.gen(function* () {
   const config = yield* DesktopConfig.DesktopConfig;
   const networkInterfaces = yield* DesktopNetworkInterfaces.DesktopNetworkInterfaces;
   const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const fileSystem = yield* FileSystem.FileSystem;
   const httpClient = yield* HttpClient.HttpClient;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
   const stateRef = yield* Ref.make(initialRuntimeState());
 
-  // Cache the `tailscale status` spawn for the TTL. On macOS, the Mac App
-  // Store Tailscale CLI lives inside Tailscale's sandbox container, so each
-  // spawn re-triggers the "Other apps" TCC prompt.
+  // Status discovery is cached because it can involve process and network I/O.
+  // On macOS the tailscale package uses Tailscale's authenticated local API,
+  // avoiding execution of the application binary during automatic refreshes.
   const cachedReadMagicDnsName = yield* Effect.cachedWithTTL(
     readTailscaleStatus.pipe(
       Effect.map((status) => status.magicDnsName),
       Effect.orElseSucceed(() => null),
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, childProcessSpawner),
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
+      Effect.provideService(HttpClient.HttpClient, httpClient),
     ),
     TAILSCALE_STATUS_CACHE_TTL,
   );
@@ -530,9 +534,8 @@ export const make = Effect.gen(function* () {
       customHttpsEndpointUrls: config.desktopHttpsEndpointUrls,
     });
 
-    // Don't spawn the Tailscale CLI when the user hasn't opted into any
-    // network exposure. The spawn itself triggers a macOS "Other apps"
-    // TCC prompt on Mac App Store Tailscale builds.
+    // Skip Tailscale discovery when the user has not opted into network
+    // exposure, avoiding unnecessary filesystem, process, and network access.
     if (state.mode !== "network-accessible" && !state.tailscaleServeEnabled) {
       return coreEndpoints;
     }
@@ -545,6 +548,7 @@ export const make = Effect.gen(function* () {
       readMagicDnsName: cachedReadMagicDnsName,
     }).pipe(
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, childProcessSpawner),
+      Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(HttpClient.HttpClient, httpClient),
     );
     return [...coreEndpoints, ...tailscaleEndpoints];

@@ -1,5 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import { HttpClient } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
@@ -10,6 +11,7 @@ import {
 } from "./tailscaleEndpointProvider.ts";
 
 const unusedTailscaleExternalServicesLayer = Layer.mergeAll(
+  Layer.succeed(FileSystem.FileSystem, FileSystem.makeNoop({})),
   Layer.succeed(
     HttpClient.HttpClient,
     HttpClient.make(() => Effect.die("unexpected Tailscale HTTPS probe")),
