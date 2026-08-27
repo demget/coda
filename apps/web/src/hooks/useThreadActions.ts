@@ -25,6 +25,7 @@ import { threadEnvironment } from "../state/threads";
 import { vcsEnvironment } from "../state/vcs";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { refreshArchivedThreadsForEnvironment } from "../lib/archivedThreadsState";
+import { releaseComposerDraftUploads } from "../lib/composerDraftUploads";
 import { readLocalApi } from "../localApi";
 import {
   readEnvironmentSupportsPinning,
@@ -330,6 +331,7 @@ export function useThreadActions() {
               "",
               "Delete the worktree too?",
             ].join("\n"),
+            { variant: "destructive" },
           ),
         );
         if (confirmationResult._tag === "Failure") {
@@ -369,6 +371,7 @@ export function useThreadActions() {
         return deleteResult;
       }
       refreshArchivedThreadsForEnvironment(threadRef.environmentId);
+      releaseComposerDraftUploads(threadRef);
       clearComposerDraftForThread(threadRef);
       clearProjectDraftThreadById(
         scopeProjectRef(threadRef.environmentId, thread.projectId),
@@ -695,6 +698,7 @@ export function useThreadActions() {
               `Delete thread "${title}"?`,
               "This permanently clears conversation history for this thread.",
             ].join("\n"),
+            { variant: "destructive" },
           ),
         );
         if (confirmationResult._tag === "Failure") {

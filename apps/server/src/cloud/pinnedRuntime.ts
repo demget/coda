@@ -10,8 +10,8 @@ import * as ProcessRunner from "../processRunner.ts";
 
 /**
  * A pinned runtime is an exact `coda@<version>` npm-installed into
- * <baseDir>/runtime/versions/<version>. The boot service points its systemd
- * unit here, and server self-update installs the target version here before
+ * <baseDir>/runtime/versions/<version>. The boot service points its unit or
+ * launch agent here, and server self-update installs the target version here before
  * switching over, never `npx coda`, whose cache is ephemeral and whose
  * registry fetch at boot would make startup depend on the network.
  */

@@ -41,6 +41,14 @@ vp run dev:desktop   # Electron shell instead of the browser
 The `[dev-runner]` line printed at startup tells you the real ports and data directory. The web app
 requires pairing — open the pairing URL it prints, not the bare origin.
 
+Nightly:
+
+```bash
+yay -S t3code-nightly-bin
+```
+
+The AUR packaging is maintained in this repository under [`packaging/aur`](./packaging/aur).
+
 ## Some notes
 
 We are very very early in this project. Expect bugs.
@@ -54,6 +62,7 @@ Full docs live in [docs/](./docs). There's no docs site yet.
 - [Install and first run](./docs/user/install.md)
 - [Permission modes](./docs/user/permission-modes.md)
 - [Keyboard shortcuts](./docs/user/keybindings.md)
+- [Customize a project icon](./docs/user/project-settings.md)
 - [Remote access from a phone or another machine](./docs/user/remote-access.md)
 - [Keeping app and server in sync](./docs/user/updating.md)
 - [Source control integrations](./docs/user/source-control.md)
@@ -88,6 +97,8 @@ Checkout their getting started guide for more information: https://viteplus.dev/
 vp i
 ```
 
-Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or PR.
+Read [CONTRIBUTING.md](./CONTRIBUTING.md) before reporting a bug or opening a PR.
+
+Have a feature request? Start an [Ideas discussion](https://github.com/pingdotgg/t3code/discussions/categories/ideas).
 
 Need support? Join the [Discord](https://discord.gg/jn4EGJjrvv).
