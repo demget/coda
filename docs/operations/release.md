@@ -215,6 +215,7 @@ available.
 - macOS metadata note:
   - `electron-updater` reads `latest-mac.yml` on stable and `nightly-mac.yml` on nightly, for both Intel and Apple Silicon.
   - The workflow merges the per-arch mac manifests into one channel-specific mac manifest before publishing the GitHub Release.
+  - Squirrel.Mac verifies a downloaded app against the installed app's designated code requirement. Official releases satisfy this with Developer ID signing. The downstream desktop workflow applies a stable ad-hoc requirement to the outer app bundle, which enables later in-app updates after one manual install but does not provide Apple trust or notarization.
 
 ### Windows payload topology and update validation
 

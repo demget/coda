@@ -268,7 +268,7 @@ jobs:
           OFFICIAL_TAG: ${{ needs.source.outputs.official_tag }}
         run: node scripts/update-release-package-versions.ts "${OFFICIAL_TAG#v}"
 
-      - name: Build unsigned desktop artifact
+      - name: Build desktop artifact
         shell: bash
         env:
           CODA_DESKTOP_UPDATE_REPOSITORY: ${{ github.repository }}
@@ -281,7 +281,9 @@ jobs:
             --build-version "${{ needs.source.outputs.version }}"
             --verbose
           )
-          if [[ "${{ matrix.platform }}" == "win" ]]; then
+          if [[ "${{ matrix.platform }}" == "mac" ]]; then
+            args+=(--mac-updater-adhoc)
+          elif [[ "${{ matrix.platform }}" == "win" ]]; then
             args+=(--wsl-prebuild "$GITHUB_WORKSPACE/wsl-prebuild/pty.node")
           fi
           vp run dist:desktop:artifact "${args[@]}"
@@ -343,7 +345,7 @@ jobs:
           test -f "$RUNNER_TEMP/release-assets/nightly-mac.yml"
           compgen -G "$RUNNER_TEMP/release-assets/*.exe" >/dev/null
           compgen -G "$RUNNER_TEMP/release-assets/*.dmg" >/dev/null
-          notes="Coda desktop built from ${RELEASE_SHA:0:7}, synced through official $OFFICIAL_TAG. macOS arm64 and Windows x64 builds are unsigned, so install the DMG or EXE by hand."
+          notes="Coda desktop built from ${RELEASE_SHA:0:7}, synced through official $OFFICIAL_TAG. Install the macOS DMG manually once; later nightly versions update in-app. The macOS build uses an updater-compatible ad-hoc signature and is not Apple-notarized. The Windows x64 build is unsigned."
           gh release create "$RELEASE_TAG" "$RUNNER_TEMP"/release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$RELEASE_SHA" \

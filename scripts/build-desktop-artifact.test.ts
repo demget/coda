@@ -21,6 +21,7 @@ import {
   DESKTOP_FILE_EXCLUSIONS,
   DESKTOP_EXTRA_RESOURCES,
   MAC_FILE_EXCLUSIONS,
+  MAC_UPDATER_ADHOC_REQUIREMENT,
   InvalidMacPasskeyRpDomainError,
   InvalidMacPasskeyPublishableKeyError,
   InvalidMockUpdateServerPortError,
@@ -1199,6 +1200,27 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       });
       assert.match(String(mac.sign), /\/scripts\/sign-macos\.ts$/);
       assert.deepStrictEqual(mac.protocols, [{ name: "Coda", schemes: ["t3code", "coda-dev"] }]);
+    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
+  it.effect("adds a stable ad-hoc identity to updater-compatible macOS builds", () =>
+    Effect.gen(function* () {
+      const config = yield* createBuildConfig(
+        "mac",
+        "dmg",
+        "1.2.3-nightly.20260827.1",
+        false,
+        false,
+        undefined,
+        undefined,
+        true,
+      );
+
+      const mac = config.mac as Record<string, unknown>;
+      assert.equal(MAC_UPDATER_ADHOC_REQUIREMENT, '=designated => identifier "com.coda.app"');
+      assert.equal(mac.identity, "-");
+      assert.equal(mac.notarize, false);
+      assert.match(String(mac.sign), /\/scripts\/sign-macos\.ts$/);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 

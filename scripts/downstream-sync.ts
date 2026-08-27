@@ -281,7 +281,7 @@ export function renderSyncProposal(input: {
     section("Other changes", groups["Other changes"]),
     "**Merge this PR with a merge commit. Do not squash or rebase it:** the upstream parent is retained so future syncs have the correct Git merge base.",
     "",
-    "After this PR is merged, the desktop release workflow builds unsigned macOS arm64 and Windows x64 downloads.",
+    "After this PR is merged, the desktop release workflow builds updater-compatible macOS arm64 and unsigned Windows x64 downloads.",
     "",
     "_Generated deterministically from upstream Git history; no AI summary was used._",
     "",

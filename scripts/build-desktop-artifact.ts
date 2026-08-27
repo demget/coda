@@ -158,6 +158,7 @@ interface BuildCliInput {
   readonly skipBuild: Option.Option<boolean>;
   readonly keepStage: Option.Option<boolean>;
   readonly signed: Option.Option<boolean>;
+  readonly macUpdaterAdHoc?: Option.Option<boolean>;
   readonly verbose: Option.Option<boolean>;
   readonly mockUpdates: Option.Option<boolean>;
   readonly mockUpdateServerPort: Option.Option<number>;
@@ -760,6 +761,7 @@ interface ResolvedBuildOptions {
   readonly skipBuild: boolean;
   readonly keepStage: boolean;
   readonly signed: boolean;
+  readonly macUpdaterAdHoc: boolean;
   readonly verbose: boolean;
   readonly mockUpdates: boolean;
   readonly mockUpdateServerPort: number | undefined;
@@ -1264,6 +1266,7 @@ const BuildEnvConfig = Config.all({
   skipBuild: Config.boolean("CODA_DESKTOP_SKIP_BUILD").pipe(Config.withDefault(false)),
   keepStage: Config.boolean("CODA_DESKTOP_KEEP_STAGE").pipe(Config.withDefault(false)),
   signed: Config.boolean("CODA_DESKTOP_SIGNED").pipe(Config.withDefault(false)),
+  macUpdaterAdHoc: Config.boolean("CODA_DESKTOP_MAC_UPDATER_ADHOC").pipe(Config.withDefault(false)),
   verbose: Config.boolean("CODA_DESKTOP_VERBOSE").pipe(Config.withDefault(false)),
   mockUpdates: Config.boolean("CODA_DESKTOP_MOCK_UPDATES").pipe(Config.withDefault(false)),
   mockUpdateServerPort: Config.string("CODA_DESKTOP_MOCK_UPDATE_SERVER_PORT").pipe(Config.option),
@@ -1349,6 +1352,10 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
   const skipBuild = resolveBooleanFlag(input.skipBuild, env.skipBuild);
   const keepStage = resolveBooleanFlag(input.keepStage, env.keepStage);
   const signed = resolveBooleanFlag(input.signed, env.signed);
+  const macUpdaterAdHoc = resolveBooleanFlag(
+    input.macUpdaterAdHoc ?? Option.none(),
+    env.macUpdaterAdHoc,
+  );
   const verbose = resolveBooleanFlag(input.verbose, env.verbose);
 
   const mockUpdates = resolveBooleanFlag(input.mockUpdates, env.mockUpdates);
@@ -1375,6 +1382,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
     skipBuild,
     keepStage,
     signed,
+    macUpdaterAdHoc,
     verbose,
     mockUpdates,
     mockUpdateServerPort,
@@ -2064,6 +2072,8 @@ export function resolveDesktopProductName(version: string): string {
     : (desktopPackageJson.productName ?? "Coda");
 }
 
+export const MAC_UPDATER_ADHOC_REQUIREMENT = `=designated => identifier "${DESKTOP_APP_ID}"`;
+
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   platform: typeof BuildPlatform.Type,
   target: string,
@@ -2077,6 +2087,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         readonly provisioningProfilePath: string;
       }
     | undefined,
+  macUpdaterAdHoc = false,
 ) {
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
@@ -2114,6 +2125,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "mac") {
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
+    const useUpdaterAdHocSignature = macUpdaterAdHoc && !signed;
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
@@ -2128,7 +2140,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
           schemes: ["t3code", "coda-dev"],
         },
       ],
-      ...(signed ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") } : {}),
+      ...(signed || useUpdaterAdHocSignature
+        ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") }
+        : {}),
+      ...(useUpdaterAdHocSignature ? { identity: "-", notarize: false } : {}),
       ...(macPasskeySigning
         ? {
             entitlements: macPasskeySigning.entitlementsPath,
@@ -2907,6 +2922,8 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
           catch: MacPasskeySigningConfigurationResolutionError.fromCause,
         })
       : undefined;
+  const useMacUpdaterAdHoc =
+    options.platform === "mac" && options.macUpdaterAdHoc && !options.signed;
   const macPasskeySigning = configuredMacPasskeySigning
     ? {
         ...configuredMacPasskeySigning,
@@ -2983,6 +3000,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
             provisioningProfilePath: macPasskeySigning.provisioningProfilePath,
           }
         : undefined,
+      useMacUpdaterAdHoc,
     ),
     dependencies: stageDependencies,
     devDependencies: {
@@ -3052,6 +3070,10 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     if (value === "") {
       delete buildEnv[key];
     }
+  }
+  delete buildEnv.CODA_MACOS_UPDATE_REQUIREMENT;
+  if (useMacUpdaterAdHoc) {
+    buildEnv.CODA_MACOS_UPDATE_REQUIREMENT = MAC_UPDATER_ADHOC_REQUIREMENT;
   }
   if (!options.signed) {
     buildEnv.CSC_IDENTITY_AUTO_DISCOVERY = "false";
@@ -3202,6 +3224,12 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
   signed: Flag.boolean("signed").pipe(
     Flag.withDescription(
       "Enable signing/notarization discovery; Windows uses Azure Trusted Signing (env: CODA_DESKTOP_SIGNED).",
+    ),
+    Flag.optional,
+  ),
+  macUpdaterAdHoc: Flag.boolean("mac-updater-adhoc").pipe(
+    Flag.withDescription(
+      "Apply a stable ad-hoc signature so unsigned macOS builds can install updates (env: CODA_DESKTOP_MAC_UPDATER_ADHOC).",
     ),
     Flag.optional,
   ),
