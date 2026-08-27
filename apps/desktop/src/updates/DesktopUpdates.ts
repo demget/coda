@@ -226,6 +226,7 @@ function getAutoUpdateDisabledReason(args: {
   appImage?: string | undefined;
   disabledByEnv: boolean;
   hasUpdateFeedConfig: boolean;
+  missingMacCodeSignature: boolean;
 }): string | null {
   if (!args.hasUpdateFeedConfig) {
     return "Automatic updates are not available because no update feed is configured.";
@@ -238,6 +239,9 @@ function getAutoUpdateDisabledReason(args: {
   }
   if (args.platform === "linux" && !args.appImage) {
     return "Automatic updates on Linux require running the AppImage build.";
+  }
+  if (args.missingMacCodeSignature) {
+    return "Automatic updates are not available because this macOS build is not code signed; download and install new versions manually.";
   }
   return null;
 }
@@ -258,6 +262,7 @@ export const make = Effect.gen(function* () {
 
   const appUpdateYmlConfigRef = yield* Ref.make<Option.Option<AppUpdateYmlConfig>>(Option.none());
   const activeUpdateActionRef = yield* Ref.make<Option.Option<UpdateAction>>(Option.none());
+  const missingMacCodeSignatureRef = yield* Ref.make(false);
   const updaterConfiguredRef = yield* Ref.make(false);
   const lastLoggedDownloadMilestoneRef = yield* Ref.make(-1);
   const updateStateRef = yield* Ref.make<DesktopUpdateState>(
@@ -299,8 +304,28 @@ export const make = Effect.gen(function* () {
     Effect.map((appUpdateYmlConfig) => Option.isSome(appUpdateYmlConfig) || config.mockUpdates),
   );
 
+  // Squirrel.Mac validates the bundle's code signature before swapping in an
+  // update, so an unsigned macOS build can never complete an install: every
+  // attempt stops the backends, destroys the windows, and then fails. Treat a
+  // missing signature seal as "auto-updates unavailable" up front. Mock-update
+  // runs skip the check because they never reach Squirrel.
+  const detectMissingMacCodeSignature = Effect.gen(function* () {
+    if (environment.platform !== "darwin" || !environment.isPackaged || config.mockUpdates) {
+      return false;
+    }
+    const sealPath = environment.path.join(
+      environment.resourcesPath,
+      "..",
+      "_CodeSignature",
+      "CodeResources",
+    );
+    const sealExists = yield* fileSystem.exists(sealPath).pipe(Effect.orElseSucceed(() => false));
+    return !sealExists;
+  }).pipe(Effect.withSpan("desktop.updates.detectMissingMacCodeSignature"));
+
   const resolveDisabledReason = Effect.gen(function* () {
     const hasFeedConfig = yield* hasUpdateFeedConfig;
+    const missingMacCodeSignature = yield* Ref.get(missingMacCodeSignatureRef);
     return Option.fromNullishOr(
       getAutoUpdateDisabledReason({
         isDevelopment: environment.isDevelopment,
@@ -309,6 +334,7 @@ export const make = Effect.gen(function* () {
         appImage: Option.getOrUndefined(config.appImagePath),
         disabledByEnv: config.disableAutoUpdate,
         hasUpdateFeedConfig: hasFeedConfig,
+        missingMacCodeSignature,
       }),
     );
   });
@@ -462,6 +488,20 @@ export const make = Effect.gen(function* () {
     { discard: true },
   );
 
+  // An install tears the app down before Squirrel takes over: every backend is
+  // stopped and every window destroyed. When the install then fails, the
+  // process is still alive but headless, so restart the pool — the primary's
+  // onReady callback reopens the main window once its backend is ready again.
+  const recoverFromFailedInstall = Effect.gen(function* () {
+    const instances = yield* pool.list;
+    yield* logUpdaterInfo("restarting backends after failed update install", {
+      instanceCount: instances.length,
+    });
+    yield* Effect.forEach(instances, (instance) => instance.start, {
+      concurrency: "unbounded",
+    });
+  }).pipe(Effect.withSpan("desktop.updates.recoverFromFailedInstall"));
+
   const installDownloadedUpdate = Effect.gen(function* () {
     const state = yield* Ref.get(updateStateRef);
     const hasInstallableDownload =
@@ -517,6 +557,7 @@ export const make = Effect.gen(function* () {
               isSilent: error.isSilent,
               isForceRunAfter: error.isForceRunAfter,
             });
+            yield* recoverFromFailedInstall;
             return { accepted: true, completed: false };
           },
         ),
@@ -536,6 +577,7 @@ export const make = Effect.gen(function* () {
             errorTag: error._tag,
             action: error.action,
           });
+          yield* recoverFromFailedInstall;
           return { accepted: true, completed: false };
         }),
       ),
@@ -643,6 +685,9 @@ export const make = Effect.gen(function* () {
         errorTag: error._tag,
         operation: error.operation,
       });
+      // On macOS quitAndInstall returns before Squirrel reports failure, so
+      // the app has already been torn down by the time this error arrives.
+      yield* recoverFromFailedInstall;
       return;
     }
 
@@ -733,6 +778,7 @@ export const make = Effect.gen(function* () {
 
       const appUpdateYmlConfig = yield* readAppUpdateYml;
       yield* Ref.set(appUpdateYmlConfigRef, appUpdateYmlConfig);
+      yield* Ref.set(missingMacCodeSignatureRef, yield* detectMissingMacCodeSignature);
 
       if (config.mockUpdates) {
         yield* electronUpdater.setFeedURL({

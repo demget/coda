@@ -6,6 +6,7 @@ import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Option from "effect/Option";
@@ -32,12 +33,14 @@ interface UpdatesHarnessOptions {
   readonly setDisableDifferentialDownload?: Effect.Effect<void>;
   readonly stopBackend?: Effect.Effect<void>;
   readonly env?: Record<string, string | undefined>;
+  readonly resourcesPath?: string;
 }
 
 const flushCallbacks = Effect.yieldNow;
 
 function makeHarness(options: UpdatesHarnessOptions = {}) {
   let checkCount = 0;
+  let backendStartCount = 0;
   let allowDowngrade = false;
   let fullChangelog = false;
   const feedUrls: ElectronUpdater.ElectronUpdaterFeedUrl[] = [];
@@ -116,7 +119,9 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
   const stubBackendInstance: DesktopBackendPool.DesktopBackendInstance = {
     id: DesktopBackendPool.PRIMARY_INSTANCE_ID,
     label: Effect.succeed("Windows"),
-    start: Effect.void,
+    start: Effect.sync(() => {
+      backendStartCount += 1;
+    }),
     stop: () => options.stopBackend ?? Effect.void,
     currentConfig: Effect.succeed(Option.none()),
     snapshot: Effect.succeed({
@@ -138,7 +143,7 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
     appVersion: "1.2.3",
     appPath: "/repo",
     isPackaged: true,
-    resourcesPath: "/missing/resources",
+    resourcesPath: options.resourcesPath ?? "/missing/resources",
     runningUnderArm64Translation: false,
   }).pipe(
     Layer.provide(
@@ -211,6 +216,7 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
   return {
     layer,
     checkCount: () => checkCount,
+    backendStartCount: () => backendStartCount,
     feedUrls: () => feedUrls,
     fullChangelog: () => fullChangelog,
     listenerCount: () =>
@@ -721,6 +727,122 @@ describe("DesktopUpdates", () => {
 
         const changedState = yield* updates.setChannel("nightly");
         assert.equal(changedState.channel, "nightly");
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
+  it.effect("restarts backends and clears quitting when the installer reports an error", () => {
+    const harness = makeHarness();
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const desktopState = yield* DesktopState.DesktopState;
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        harness.emit("update-downloaded", { version: "1.2.4" });
+        yield* flushCallbacks;
+
+        const result = yield* updates.install;
+        assert.isTrue(result.accepted);
+        assert.isTrue(yield* Ref.get(desktopState.quitting));
+
+        harness.emit("error", new Error("code signature did not pass validation"));
+        yield* flushCallbacks;
+
+        assert.isFalse(yield* Ref.get(desktopState.quitting));
+        assert.equal(harness.backendStartCount(), 1);
+
+        const failedState = yield* updates.getState;
+        assert.equal(failedState.errorContext, "install");
+        assert.equal(failedState.message, "Desktop updater install operation reported an error.");
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
+  it.effect("restarts backends after an unexpected install setup failure", () => {
+    const harness = makeHarness({
+      stopBackend: Effect.die(new Error("backend stop failed")),
+    });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        harness.emit("update-downloaded", { version: "1.2.4" });
+        yield* flushCallbacks;
+
+        const result = yield* updates.install;
+        assert.isTrue(result.accepted);
+        assert.isFalse(result.completed);
+        assert.equal(harness.backendStartCount(), 1);
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
+  it.effect("disables automatic updates when a packaged macOS build is not code signed", () => {
+    const bundleRoot = `/tmp/t3-desktop-updates-unsigned-${process.pid}`;
+    const harness = makeHarness({
+      resourcesPath: `${bundleRoot}/Contents/Resources`,
+      env: { CODA_DESKTOP_MOCK_UPDATES: "false" },
+    });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        yield* fileSystem.makeDirectory(`${bundleRoot}/Contents/Resources`, { recursive: true });
+        yield* fileSystem.writeFileString(
+          `${bundleRoot}/Contents/Resources/app-update.yml`,
+          "provider: github\nowner: coda\nrepo: coda\n",
+        );
+
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+
+        const state = yield* updates.getState;
+        assert.equal(state.enabled, false);
+        assert.equal(state.status, "disabled");
+        const reason = yield* updates.disabledReason;
+        assert.include(
+          Option.getOrElse(reason, () => ""),
+          "not code signed",
+        );
+
+        yield* fileSystem.remove(bundleRoot, { recursive: true });
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
+  it.effect("keeps automatic updates enabled when a packaged macOS build is code signed", () => {
+    const bundleRoot = `/tmp/t3-desktop-updates-signed-${process.pid}`;
+    const harness = makeHarness({
+      resourcesPath: `${bundleRoot}/Contents/Resources`,
+      env: { CODA_DESKTOP_MOCK_UPDATES: "false" },
+    });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        yield* fileSystem.makeDirectory(`${bundleRoot}/Contents/Resources`, { recursive: true });
+        yield* fileSystem.makeDirectory(`${bundleRoot}/Contents/_CodeSignature`, {
+          recursive: true,
+        });
+        yield* fileSystem.writeFileString(
+          `${bundleRoot}/Contents/Resources/app-update.yml`,
+          "provider: github\nowner: coda\nrepo: coda\n",
+        );
+        yield* fileSystem.writeFileString(
+          `${bundleRoot}/Contents/_CodeSignature/CodeResources`,
+          "seal",
+        );
+
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+
+        const state = yield* updates.getState;
+        assert.equal(state.enabled, true);
+        assert.equal(state.status, "idle");
+
+        yield* fileSystem.remove(bundleRoot, { recursive: true });
       }),
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
