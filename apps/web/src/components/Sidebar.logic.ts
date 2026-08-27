@@ -125,6 +125,7 @@ export interface ThreadStatusPill {
     | "Completed"
     | "Pending Approval"
     | "Awaiting Input"
+    | "Needs Input"
     | "Plan Ready";
   colorClass: string;
   dotClass: string;
@@ -137,6 +138,7 @@ export interface ThreadStatusPill {
 const THREAD_STATUS_PRIORITY: Record<ThreadStatusPill["label"], number> = {
   "Pending Approval": 6,
   "Awaiting Input": 5,
+  "Needs Input": 5,
   Working: 4,
   Connecting: 4,
   "Plan Ready": 3,
@@ -433,6 +435,7 @@ export function resolveThreadRowClassName(input: {
 export type SidebarThreadStatus =
   | "approval"
   | "input"
+  | "needs-input"
   | "working"
   | "monitoring"
   | "failed"
@@ -441,7 +444,9 @@ export type SidebarThreadStatus =
 type SidebarThreadStatusInput = Pick<
   SidebarThreadSummary,
   "hasPendingApprovals" | "hasPendingUserInput" | "session" | "backgroundLiveness"
->;
+> & {
+  latestTurn?: SidebarThreadSummary["latestTurn"];
+};
 
 export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): SidebarThreadStatus {
   if (thread.hasPendingApprovals) {
@@ -457,6 +462,9 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
   // see the failure, not a stale Working (review finding).
   if (thread.session?.status === "error") {
     return "failed";
+  }
+  if (thread.latestTurn?.completionAssessment?.outcome === "needs_input") {
+    return "needs-input";
   }
   // Background work outlives the turn: fleets read as working; monitoring
   // only when watch loops are the sole live work.
@@ -644,6 +652,15 @@ export function resolveThreadStatusPill(input: {
       colorClass: "text-sky-600 dark:text-sky-300/80",
       dotClass: "bg-sky-500 dark:bg-sky-300/80",
       pulse: true,
+    };
+  }
+
+  if (thread.latestTurn?.completionAssessment?.outcome === "needs_input") {
+    return {
+      label: "Needs Input",
+      colorClass: "text-indigo-600 dark:text-indigo-300/90",
+      dotClass: "bg-indigo-500 dark:bg-indigo-300/90",
+      pulse: false,
     };
   }
 

@@ -15,6 +15,7 @@ import {
   normalizePersistedServerSettingString,
   parsePersistedServerObservabilitySettings,
   resolveSourceControlWriterModelSelection,
+  resolveTurnCompletionAnalysisModelSelection,
 } from "./serverSettings.ts";
 
 describe("serverSettings helpers", () => {
@@ -203,6 +204,32 @@ describe("serverSettings helpers", () => {
         sourceControlWriterModelSelection: null,
       }).sourceControlWriterModelSelection,
     ).toBeNull();
+  });
+
+  it("uses a dedicated turn completion analysis model when configured", () => {
+    const selection = createModelSelection(
+      ProviderInstanceId.make("codex_reviewer"),
+      "gpt-5.4-mini",
+    );
+    const settings = {
+      ...DEFAULT_SERVER_SETTINGS,
+      providerInstances: {
+        codex_reviewer: {
+          driver: ProviderDriverKind.make("codex"),
+          enabled: true,
+          config: {},
+        },
+      },
+      turnCompletionAnalysisModelSelection: selection,
+    };
+
+    expect(resolveTurnCompletionAnalysisModelSelection(settings)).toBe(selection);
+  });
+
+  it("falls back to the global text generation model without a dedicated selection", () => {
+    expect(resolveTurnCompletionAnalysisModelSelection(DEFAULT_SERVER_SETTINGS)).toBe(
+      DEFAULT_SERVER_SETTINGS.textGenerationModelSelection,
+    );
   });
 
   it("falls back from a disabled source control writer provider without clearing its selection", () => {

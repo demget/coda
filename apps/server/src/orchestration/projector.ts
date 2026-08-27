@@ -33,6 +33,7 @@ import {
   ThreadRevertedPayload,
   ThreadSessionSetPayload,
   ThreadTurnDiffCompletedPayload,
+  ThreadTurnCompletionAssessedPayload,
 } from "./Schemas.ts";
 
 type ThreadPatch = Partial<Omit<OrchestrationThread, "id" | "projectId">>;
@@ -705,11 +706,40 @@ export function projectEvent(
                       : payload.completedAt,
                   completedAt: payload.completedAt,
                   assistantMessageId: payload.assistantMessageId,
+                  ...(thread.latestTurn?.turnId === payload.turnId &&
+                  thread.latestTurn.completionAssessment !== undefined
+                    ? { completionAssessment: thread.latestTurn.completionAssessment }
+                    : {}),
                 },
             updatedAt: event.occurredAt,
           }),
         };
       });
+
+    case "thread.turn-completion-assessed":
+      return decodeForEvent(
+        ThreadTurnCompletionAssessedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => {
+          const thread = nextBase.threads.find((entry) => entry.id === payload.threadId);
+          if (!thread || thread.latestTurn?.turnId !== payload.turnId) {
+            return nextBase;
+          }
+          return {
+            ...nextBase,
+            threads: updateThread(nextBase.threads, payload.threadId, {
+              latestTurn: {
+                ...thread.latestTurn,
+                completionAssessment: payload.assessment,
+              },
+              updatedAt: event.occurredAt,
+            }),
+          };
+        }),
+      );
 
     case "thread.reverted":
       return decodeForEvent(ThreadRevertedPayload, event.payload, event.type, "payload").pipe(

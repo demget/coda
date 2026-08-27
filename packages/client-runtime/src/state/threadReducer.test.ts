@@ -802,6 +802,48 @@ describe("applyThreadDetailEvent", () => {
     });
   });
 
+  describe("thread.turn-completion-assessed", () => {
+    it("attaches the assessment to the matching latest turn", () => {
+      const thread: OrchestrationThread = {
+        ...baseThread,
+        latestTurn: {
+          turnId: TurnId.make("turn-1"),
+          state: "completed",
+          requestedAt: "2026-04-01T11:55:00.000Z",
+          startedAt: "2026-04-01T11:56:00.000Z",
+          completedAt: "2026-04-01T12:00:00.000Z",
+          assistantMessageId: MessageId.make("msg-3"),
+        },
+      };
+      const result = applyThreadDetailEvent(thread, {
+        ...baseEventFields,
+        sequence: 14,
+        occurredAt: "2026-04-01T12:00:01.000Z",
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        type: "thread.turn-completion-assessed",
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          turnId: TurnId.make("turn-1"),
+          assessment: {
+            outcome: "needs_input",
+            summary: "The agent needs a target environment.",
+            assessedAt: "2026-04-01T12:00:01.000Z",
+          },
+        },
+      });
+
+      expect(result.kind).toBe("updated");
+      if (result.kind === "updated") {
+        expect(result.thread.latestTurn?.completionAssessment).toEqual({
+          outcome: "needs_input",
+          summary: "The agent needs a target environment.",
+          assessedAt: "2026-04-01T12:00:01.000Z",
+        });
+      }
+    });
+  });
+
   describe("thread.reverted", () => {
     it("filters entities to retained turns", () => {
       const threadWithData: OrchestrationThread = {

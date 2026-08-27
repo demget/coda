@@ -24,12 +24,14 @@ import {
   buildCommitMessagePrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
+  buildTurnCompletionAssessmentPrompt,
 } from "./TextGenerationPrompts.ts";
 import {
   normalizeCliError,
   sanitizeCommitSubject,
   sanitizePrTitle,
   sanitizeThreadTitle,
+  sanitizeTurnCompletionAssessmentSummary,
   toJsonSchemaObject,
 } from "./TextGenerationUtils.ts";
 import {
@@ -85,7 +87,8 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle",
+      | "generateThreadTitle"
+      | "assessTurnCompletion",
     value: unknown,
     detail: string,
   ): Effect.Effect<string, TextGenerationError> =>
@@ -115,7 +118,8 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "assessTurnCompletion";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -359,10 +363,27 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       };
     });
 
+  const assessTurnCompletion: TextGeneration.TextGeneration["Service"]["assessTurnCompletion"] =
+    Effect.fn("ClaudeTextGeneration.assessTurnCompletion")(function* (input) {
+      const { prompt, outputSchema } = buildTurnCompletionAssessmentPrompt(input);
+      const generated = yield* runClaudeJson({
+        operation: "assessTurnCompletion",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+      return {
+        outcome: generated.outcome,
+        summary: sanitizeTurnCompletionAssessmentSummary(generated.summary, generated.outcome),
+      };
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    assessTurnCompletion,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

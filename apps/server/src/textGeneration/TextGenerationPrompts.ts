@@ -316,3 +316,34 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
 
   return { prompt, outputSchema };
 }
+
+export interface TurnCompletionAssessmentPromptInput {
+  task: string;
+  response: string;
+}
+
+export function buildTurnCompletionAssessmentPrompt(input: TurnCompletionAssessmentPromptInput) {
+  const prompt = [
+    "Classify what the coding agent says about the outcome of the user's task.",
+    'Return JSON with exactly two keys: outcome and summary. outcome must be "implemented" or "needs_input".',
+    "Rules:",
+    "- Judge the agent's explicit report, not whether the implementation is objectively correct.",
+    '- Use "implemented" when the agent states the requested work is complete or implemented, or directly delivers the requested answer or artifact.',
+    '- Use "needs_input" when the agent asks for required input, clarification, approval, access, or a decision before it can finish.',
+    '- Use "needs_input" when the agent reports being blocked, only proposes a plan for requested implementation, or says required work remains. A plan is "implemented" when planning itself was the requested task.',
+    '- Optional follow-up offers such as "let me know if you want more" do not mean input is required.',
+    "- A failed or unrun verification step alone does not negate an explicit implementation claim; summarize the caveat.",
+    "- summary must be one concise sentence explaining the classification, without markdown.",
+    "",
+    "User task:",
+    limitSection(input.task, 12_000),
+    "",
+    "Agent response:",
+    limitSection(input.response, 20_000),
+  ].join("\n");
+  const outputSchema = Schema.Struct({
+    outcome: Schema.Literals(["implemented", "needs_input"]),
+    summary: Schema.String,
+  });
+  return { prompt, outputSchema };
+}

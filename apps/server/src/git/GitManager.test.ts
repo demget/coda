@@ -293,6 +293,11 @@ function createTextGeneration(
       Effect.succeed({
         title: "Update workflow",
       }),
+    assessTurnCompletion: () =>
+      Effect.succeed({
+        outcome: "implemented",
+        summary: "The agent reports the task is implemented.",
+      }),
     ...overrides,
   };
 
@@ -336,6 +341,17 @@ function createTextGeneration(
           (cause) =>
             new TextGenerationError({
               operation: "generateThreadTitle",
+              detail: "fake text generation failed",
+              ...(cause !== undefined ? { cause } : {}),
+            }),
+        ),
+      ),
+    assessTurnCompletion: (input) =>
+      implementation.assessTurnCompletion(input).pipe(
+        Effect.mapError(
+          (cause) =>
+            new TextGenerationError({
+              operation: "assessTurnCompletion",
               detail: "fake text generation failed",
               ...(cause !== undefined ? { cause } : {}),
             }),

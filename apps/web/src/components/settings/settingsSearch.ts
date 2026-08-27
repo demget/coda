@@ -150,6 +150,11 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/general",
   },
   {
+    id: "turn-completion-analysis",
+    title: "Turn completion analysis",
+    to: "/settings/general",
+  },
+  {
     id: "diagnostics",
     title: "Diagnostics",
     to: "/settings/general",

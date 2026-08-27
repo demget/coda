@@ -129,6 +129,13 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
     });
   });
 
+  it("keeps turn completion analysis disabled for existing installations", () => {
+    const settings = decodeServerSettings({});
+
+    expect(settings.turnCompletionAnalysisEnabled).toBe(false);
+    expect(settings.turnCompletionAnalysisModelSelection).toBeNull();
+  });
+
   it("defaults to an empty record so legacy configs without the key still decode", () => {
     expect(DEFAULT_SERVER_SETTINGS.providerInstances).toEqual({});
   });

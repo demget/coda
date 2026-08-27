@@ -692,6 +692,23 @@ describe("resolveSidebarThreadStatus", () => {
     ).toBe("ready");
   });
 
+  it("reports a completed turn that still needs user input", () => {
+    expect(
+      resolveSidebarThreadStatus({
+        ...idle,
+        latestTurn: {
+          ...makeLatestTurn(),
+          completionAssessment: {
+            outcome: "needs_input",
+            summary: "The agent needs a target environment.",
+            assessedAt: "2026-03-09T10:05:01.000Z",
+          },
+        },
+        session: { ...session, status: "ready" as const },
+      }),
+    ).toBe("needs-input");
+  });
+
   it("defaults to ready with no session", () => {
     expect(resolveSidebarThreadStatus({ ...idle, session: null })).toBe("ready");
   });
@@ -1108,6 +1125,29 @@ describe("resolveThreadStatusPill", () => {
         },
       }),
     ).toMatchObject({ label: "Completed", pulse: false });
+  });
+
+  it("keeps a needs-input assessment visible after the completion is read", () => {
+    expect(
+      resolveThreadStatusPill({
+        thread: {
+          ...baseThread,
+          latestTurn: {
+            ...makeLatestTurn(),
+            completionAssessment: {
+              outcome: "needs_input",
+              summary: "The agent needs a target environment.",
+              assessedAt: "2026-03-09T10:05:01.000Z",
+            },
+          },
+          session: {
+            ...baseThread.session,
+            status: "ready",
+            activeTurnId: null,
+          },
+        },
+      }),
+    ).toMatchObject({ label: "Needs Input", pulse: false });
   });
 });
 

@@ -63,6 +63,19 @@ export function sanitizeThreadTitle(raw: string): string {
   return `${normalized.slice(0, 47).trimEnd()}...`;
 }
 
+export function sanitizeTurnCompletionAssessmentSummary(
+  raw: string,
+  outcome: "implemented" | "needs_input",
+): string {
+  const summary = raw.replace(/\s+/g, " ").trim().slice(0, 240).trim();
+  if (summary.length > 0) {
+    return summary;
+  }
+  return outcome === "implemented"
+    ? "The agent reports that the requested work is implemented."
+    : "The agent reports that more input is required to finish the task.";
+}
+
 /** CLI name to human-readable label, e.g. "codex" → "Codex CLI (`codex`)" */
 function cliLabel(cliName: string): string {
   const capitalized = cliName.charAt(0).toUpperCase() + cliName.slice(1);

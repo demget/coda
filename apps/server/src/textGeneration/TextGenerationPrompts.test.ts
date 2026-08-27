@@ -5,8 +5,13 @@ import {
   buildCommitMessagePrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
+  buildTurnCompletionAssessmentPrompt,
 } from "./TextGenerationPrompts.ts";
-import { normalizeCliError, sanitizeThreadTitle } from "./TextGenerationUtils.ts";
+import {
+  normalizeCliError,
+  sanitizeThreadTitle,
+  sanitizeTurnCompletionAssessmentSummary,
+} from "./TextGenerationUtils.ts";
 import { TextGenerationError } from "@t3tools/contracts";
 
 describe("buildCommitMessagePrompt", () => {
@@ -233,6 +238,31 @@ describe("buildThreadTitlePrompt", () => {
       `Thread contents:\n[Earlier content truncated]\n\n${retainedContext}`,
     );
     expect(result.prompt.match(/\[Earlier content truncated\]/g)).toHaveLength(1);
+  });
+});
+
+describe("buildTurnCompletionAssessmentPrompt", () => {
+  it("asks the model to classify the agent's stated outcome", () => {
+    const result = buildTurnCompletionAssessmentPrompt({
+      task: "Implement the settings toggle.",
+      response: "I need to know which provider should run the analysis.",
+    });
+
+    expect(result.prompt).toContain("Judge the agent's explicit report");
+    expect(result.prompt).toContain('outcome must be "implemented" or "needs_input"');
+    expect(result.prompt).toContain("User task:\nImplement the settings toggle.");
+    expect(result.prompt).toContain(
+      "Agent response:\nI need to know which provider should run the analysis.",
+    );
+  });
+
+  it("sanitizes empty and oversized assessment summaries", () => {
+    expect(sanitizeTurnCompletionAssessmentSummary("   ", "needs_input")).toBe(
+      "The agent reports that more input is required to finish the task.",
+    );
+    expect(sanitizeTurnCompletionAssessmentSummary("x".repeat(300), "implemented")).toHaveLength(
+      240,
+    );
   });
 });
 

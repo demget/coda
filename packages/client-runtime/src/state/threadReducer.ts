@@ -500,12 +500,32 @@ export function applyThreadDetailEvent(
               startedAt: thread.latestTurn?.startedAt ?? event.payload.completedAt,
               completedAt: event.payload.completedAt,
               assistantMessageId: event.payload.assistantMessageId,
+              ...(thread.latestTurn?.completionAssessment !== undefined
+                ? { completionAssessment: thread.latestTurn.completionAssessment }
+                : {}),
             }
           : thread.latestTurn;
 
       return {
         kind: "updated",
         thread: { ...thread, checkpoints, latestTurn, updatedAt: event.occurredAt },
+      };
+    }
+
+    case "thread.turn-completion-assessed": {
+      if (thread.latestTurn?.turnId !== event.payload.turnId) {
+        return { kind: "unchanged" };
+      }
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          latestTurn: {
+            ...thread.latestTurn,
+            completionAssessment: event.payload.assessment,
+          },
+          updatedAt: event.occurredAt,
+        },
       };
     }
 

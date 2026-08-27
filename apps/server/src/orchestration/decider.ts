@@ -860,6 +860,33 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.turn.completion-assessment.complete": {
+      yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.turn-completion-assessed",
+        payload: {
+          threadId: command.threadId,
+          turnId: command.turnId,
+          assessment: {
+            outcome: command.outcome,
+            summary: command.summary,
+            assessedAt: occurredAt,
+          },
+        },
+      };
+    }
+
     case "thread.runtime-mode.set": {
       yield* requireThread({
         readModel,

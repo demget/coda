@@ -92,6 +92,9 @@ function resolveThreadAwarenessPhase(
   if (thread.session?.status === "running" || thread.latestTurn?.state === "running") {
     return "running";
   }
+  if (thread.latestTurn?.completionAssessment?.outcome === "needs_input") {
+    return "waiting_for_input";
+  }
   if (thread.latestTurn?.state === "completed") {
     return "completed";
   }
@@ -144,6 +147,9 @@ function detailForPhase(
   }
   if (phase === "completed") {
     return "Review the completed task.";
+  }
+  if (phase === "waiting_for_input" && !thread.hasPendingUserInput) {
+    return thread.latestTurn?.completionAssessment?.summary;
   }
   if (phase === "running" && thread.session?.providerName) {
     return `${thread.session.providerName} is active.`;

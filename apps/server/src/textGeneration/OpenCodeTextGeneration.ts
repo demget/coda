@@ -23,12 +23,14 @@ import {
   buildCommitMessagePrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
+  buildTurnCompletionAssessmentPrompt,
 } from "./TextGenerationPrompts.ts";
 import * as TextGeneration from "./TextGeneration.ts";
 import {
   sanitizeCommitSubject,
   sanitizePrTitle,
   sanitizeThreadTitle,
+  sanitizeTurnCompletionAssessmentSummary,
 } from "./TextGenerationUtils.ts";
 import * as OpenCodeRuntime from "../provider/opencodeRuntime.ts";
 
@@ -39,6 +41,7 @@ const OpenCodeTextGenerationOperation = Schema.Literals([
   "generatePrContent",
   "generateBranchName",
   "generateThreadTitle",
+  "assessTurnCompletion",
 ]);
 
 type OpenCodeTextGenerationOperation = typeof OpenCodeTextGenerationOperation.Type;
@@ -253,7 +256,8 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "assessTurnCompletion";
   }) =>
     sharedServerMutex.withPermit(
       Effect.gen(function* () {
@@ -615,10 +619,27 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       };
     });
 
+  const assessTurnCompletion: TextGeneration.TextGeneration["Service"]["assessTurnCompletion"] =
+    Effect.fn("OpenCodeTextGeneration.assessTurnCompletion")(function* (input) {
+      const { prompt, outputSchema } = buildTurnCompletionAssessmentPrompt(input);
+      const generated = yield* runOpenCodeJson({
+        operation: "assessTurnCompletion",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+      return {
+        outcome: generated.outcome,
+        summary: sanitizeTurnCompletionAssessmentSummary(generated.summary, generated.outcome),
+      };
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    assessTurnCompletion,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

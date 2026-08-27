@@ -25,6 +25,7 @@ import {
   ModelSelection,
   ProjectId,
   ThreadId,
+  TurnCompletionAssessment,
 } from "@t3tools/contracts";
 import * as Arr from "effect/Array";
 import * as Effect from "effect/Effect";
@@ -109,6 +110,7 @@ const ProjectionLatestTurnDbRowSchema = Schema.Struct({
   assistantMessageId: Schema.NullOr(MessageId),
   sourceProposedPlanThreadId: Schema.NullOr(ThreadId),
   sourceProposedPlanId: Schema.NullOr(OrchestrationProposedPlanId),
+  completionAssessment: Schema.NullOr(Schema.fromJsonString(TurnCompletionAssessment)),
 });
 const ProjectionStateDbRowSchema = ProjectionState;
 const ProjectionCountsRowSchema = Schema.Struct({
@@ -278,6 +280,9 @@ function mapLatestTurn(
             planId: row.sourceProposedPlanId,
           },
         }
+      : {}),
+    ...(row.completionAssessment !== null
+      ? { completionAssessment: row.completionAssessment }
       : {}),
   };
 }
@@ -680,7 +685,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           turns.completed_at AS "completedAt",
           turns.assistant_message_id AS "assistantMessageId",
           turns.source_proposed_plan_thread_id AS "sourceProposedPlanThreadId",
-          turns.source_proposed_plan_id AS "sourceProposedPlanId"
+          turns.source_proposed_plan_id AS "sourceProposedPlanId",
+          turns.completion_assessment_json AS "completionAssessment"
         FROM projection_threads threads
         JOIN projection_turns turns
           ON turns.thread_id = threads.thread_id
@@ -704,7 +710,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           turns.completed_at AS "completedAt",
           turns.assistant_message_id AS "assistantMessageId",
           turns.source_proposed_plan_thread_id AS "sourceProposedPlanThreadId",
-          turns.source_proposed_plan_id AS "sourceProposedPlanId"
+          turns.source_proposed_plan_id AS "sourceProposedPlanId",
+          turns.completion_assessment_json AS "completionAssessment"
         FROM projection_threads threads
         JOIN projection_turns turns
           ON turns.thread_id = threads.thread_id
@@ -730,7 +737,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           turns.completed_at AS "completedAt",
           turns.assistant_message_id AS "assistantMessageId",
           turns.source_proposed_plan_thread_id AS "sourceProposedPlanThreadId",
-          turns.source_proposed_plan_id AS "sourceProposedPlanId"
+          turns.source_proposed_plan_id AS "sourceProposedPlanId",
+          turns.completion_assessment_json AS "completionAssessment"
         FROM projection_threads threads
         JOIN projection_turns turns
           ON turns.thread_id = threads.thread_id
@@ -1050,7 +1058,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           turns.completed_at AS "completedAt",
           turns.assistant_message_id AS "assistantMessageId",
           turns.source_proposed_plan_thread_id AS "sourceProposedPlanThreadId",
-          turns.source_proposed_plan_id AS "sourceProposedPlanId"
+          turns.source_proposed_plan_id AS "sourceProposedPlanId",
+          turns.completion_assessment_json AS "completionAssessment"
         FROM projection_threads threads
         JOIN projection_turns turns
           ON turns.thread_id = threads.thread_id
@@ -1511,6 +1520,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                           planId: row.sourceProposedPlanId,
                         },
                       }
+                    : {}),
+                  ...(row.completionAssessment !== null
+                    ? { completionAssessment: row.completionAssessment }
                     : {}),
                 });
               }

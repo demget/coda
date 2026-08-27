@@ -1,7 +1,12 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import type { ChatAttachment, ModelSelection, ProviderInstanceId } from "@t3tools/contracts";
+import type {
+  ChatAttachment,
+  ModelSelection,
+  ProviderInstanceId,
+  TurnCompletionAssessmentOutcome,
+} from "@t3tools/contracts";
 import { TextGenerationError } from "@t3tools/contracts";
 
 import * as ProviderInstanceRegistry from "../provider/Services/ProviderInstanceRegistry.ts";
@@ -73,6 +78,18 @@ export interface ThreadTitleGenerationResult {
   title: string;
 }
 
+export interface TurnCompletionAssessmentGenerationInput {
+  cwd: string;
+  task: string;
+  response: string;
+  modelSelection: ModelSelection;
+}
+
+export interface TurnCompletionAssessmentGenerationResult {
+  outcome: TurnCompletionAssessmentOutcome;
+  summary: string;
+}
+
 export interface TextGenerationService {
   generateCommitMessage(
     input: CommitMessageGenerationInput,
@@ -80,6 +97,9 @@ export interface TextGenerationService {
   generatePrContent(input: PrContentGenerationInput): Promise<PrContentGenerationResult>;
   generateBranchName(input: BranchNameGenerationInput): Promise<BranchNameGenerationResult>;
   generateThreadTitle(input: ThreadTitleGenerationInput): Promise<ThreadTitleGenerationResult>;
+  assessTurnCompletion(
+    input: TurnCompletionAssessmentGenerationInput,
+  ): Promise<TurnCompletionAssessmentGenerationResult>;
 }
 
 /**
@@ -113,6 +133,10 @@ export class TextGeneration extends Context.Service<
     readonly generateThreadTitle: (
       input: ThreadTitleGenerationInput,
     ) => Effect.Effect<ThreadTitleGenerationResult, TextGenerationError>;
+
+    readonly assessTurnCompletion: (
+      input: TurnCompletionAssessmentGenerationInput,
+    ) => Effect.Effect<TurnCompletionAssessmentGenerationResult, TextGenerationError>;
   }
 >()("coda/textGeneration/TextGeneration") {}
 
@@ -123,7 +147,8 @@ type TextGenerationOp =
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
-  | "generateThreadTitle";
+  | "generateThreadTitle"
+  | "assessTurnCompletion";
 
 const resolveInstance = (
   registry: ProviderInstanceRegistry.ProviderInstanceRegistry["Service"],
@@ -162,6 +187,10 @@ export const makeTextGenerationFromRegistry = (
     generateThreadTitle: (input) =>
       resolveInstance(registry, "generateThreadTitle", input.modelSelection.instanceId).pipe(
         Effect.flatMap((textGeneration) => textGeneration.generateThreadTitle(input)),
+      ),
+    assessTurnCompletion: (input) =>
+      resolveInstance(registry, "assessTurnCompletion", input.modelSelection.instanceId).pipe(
+        Effect.flatMap((textGeneration) => textGeneration.assessTurnCompletion(input)),
       ),
   });
 

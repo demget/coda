@@ -41,6 +41,7 @@ import {
 import { forkParked, ServerActivation } from "../../serverActivation.ts";
 import {
   resolveSourceControlWriterModelSelection,
+  resolveTurnCompletionAnalysisModelSelection,
   ServerSettingsService,
 } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
@@ -58,6 +59,7 @@ type ProviderIntentEvent = Extract<
       | "thread.turn-interrupt-requested"
       | "thread.approval-response-requested"
       | "thread.user-input-response-requested"
+      | "thread.turn-diff-completed"
       | "thread.session-stop-requested";
   }
 >;
@@ -1068,6 +1070,102 @@ const make = Effect.gen(function* () {
     processThreadTitleRegenerationSafely,
   );
 
+  const assessCompletedTurn = Effect.fn("assessCompletedTurn")(function* (
+    event: Extract<ProviderIntentEvent, { type: "thread.turn-diff-completed" }>,
+  ) {
+    if (event.payload.status === "error") {
+      return;
+    }
+    const settings = yield* serverSettingsService.getSettings;
+    if (!settings.turnCompletionAnalysisEnabled) {
+      return;
+    }
+    const thread = yield* resolveThread(event.payload.threadId);
+    if (
+      !thread ||
+      thread.session?.status === "running" ||
+      thread.latestTurn?.turnId !== event.payload.turnId ||
+      thread.latestTurn.completionAssessment !== undefined
+    ) {
+      return;
+    }
+
+    const assistantMessage =
+      (event.payload.assistantMessageId !== null
+        ? thread.messages.find((message) => message.id === event.payload.assistantMessageId)
+        : undefined) ??
+      thread.messages.findLast(
+        (message) => message.role === "assistant" && message.turnId === event.payload.turnId,
+      );
+    if (!assistantMessage || assistantMessage.role !== "assistant") {
+      return;
+    }
+    const assistantIndex = thread.messages.findIndex(
+      (message) => message.id === assistantMessage.id,
+    );
+    const taskMessage = thread.messages
+      .slice(0, assistantIndex < 0 ? undefined : assistantIndex)
+      .findLast((message) => message.role === "user");
+    const task = taskMessage?.text.trim();
+    const response = assistantMessage.text.trim();
+    if (!task || !response) {
+      return;
+    }
+
+    const project = yield* resolveProject(thread.projectId);
+    const cwd =
+      resolveThreadWorkspaceCwd({
+        thread,
+        projects: project ? [project] : [],
+      }) ?? process.cwd();
+    const generated = yield* textGeneration.assessTurnCompletion({
+      cwd,
+      task,
+      response,
+      modelSelection: resolveTurnCompletionAnalysisModelSelection(
+        settings,
+        yield* providerRegistry.getProviders,
+      ),
+    });
+
+    const latestThread = yield* resolveThread(event.payload.threadId);
+    if (
+      latestThread?.latestTurn?.turnId !== event.payload.turnId ||
+      latestThread.latestTurn.completionAssessment !== undefined ||
+      latestThread.session?.status === "running"
+    ) {
+      return;
+    }
+    yield* orchestrationEngine.dispatch({
+      type: "thread.turn.completion-assessment.complete",
+      commandId: yield* serverCommandId("turn-completion-assessment"),
+      threadId: event.payload.threadId,
+      turnId: event.payload.turnId,
+      outcome: generated.outcome,
+      summary: generated.summary,
+    });
+  });
+
+  const processCompletedTurnSafely = Effect.fn("processCompletedTurnSafely")(
+    function* (event: Extract<ProviderIntentEvent, { type: "thread.turn-diff-completed" }>) {
+      yield* assessCompletedTurn(event);
+    },
+    (effect, event) =>
+      effect.pipe(
+        Effect.catchCause((cause) => {
+          if (Cause.hasInterruptsOnly(cause)) {
+            return Effect.failCause(cause);
+          }
+          return Effect.logWarning("provider command reactor failed to assess turn completion", {
+            threadId: event.payload.threadId,
+            turnId: event.payload.turnId,
+            cause: Cause.pretty(cause),
+          });
+        }),
+      ),
+  );
+  const completionAssessmentWorker = yield* makeDrainableWorker(processCompletedTurnSafely);
+
   const processTurnStartRequested = Effect.fn("processTurnStartRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>,
   ) {
@@ -1366,6 +1464,9 @@ const make = Effect.gen(function* () {
       case "thread.user-input-response-requested":
         yield* processUserInputResponseRequested(event);
         return;
+      case "thread.turn-diff-completed":
+        yield* completionAssessmentWorker.enqueue(event);
+        return;
       case "thread.session-stop-requested":
         yield* processSessionStopRequested(event);
         return;
@@ -1407,6 +1508,7 @@ const make = Effect.gen(function* () {
         event.type === "thread.turn-interrupt-requested" ||
         event.type === "thread.approval-response-requested" ||
         event.type === "thread.user-input-response-requested" ||
+        event.type === "thread.turn-diff-completed" ||
         event.type === "thread.session-stop-requested"
       ) {
         return yield* worker.enqueue(event);
@@ -1446,6 +1548,7 @@ const make = Effect.gen(function* () {
     drain: Effect.gen(function* () {
       yield* worker.drain;
       yield* threadTitleRegenerationWorker.drain;
+      yield* completionAssessmentWorker.drain;
     }),
   } satisfies ProviderCommandReactorShape;
 });

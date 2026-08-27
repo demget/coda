@@ -333,6 +333,16 @@ const OrchestrationLatestTurnState = Schema.Literals([
 ]);
 export type OrchestrationLatestTurnState = typeof OrchestrationLatestTurnState.Type;
 
+export const TurnCompletionAssessmentOutcome = Schema.Literals(["implemented", "needs_input"]);
+export type TurnCompletionAssessmentOutcome = typeof TurnCompletionAssessmentOutcome.Type;
+
+export const TurnCompletionAssessment = Schema.Struct({
+  outcome: TurnCompletionAssessmentOutcome,
+  summary: TrimmedNonEmptyString.check(Schema.isMaxLength(240)),
+  assessedAt: IsoDateTime,
+});
+export type TurnCompletionAssessment = typeof TurnCompletionAssessment.Type;
+
 export const OrchestrationLatestTurn = Schema.Struct({
   turnId: TurnId,
   state: OrchestrationLatestTurnState,
@@ -341,6 +351,7 @@ export const OrchestrationLatestTurn = Schema.Struct({
   completedAt: Schema.NullOr(IsoDateTime),
   assistantMessageId: Schema.NullOr(MessageId),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
+  completionAssessment: Schema.optional(TurnCompletionAssessment),
 });
 export type OrchestrationLatestTurn = typeof OrchestrationLatestTurn.Type;
 
@@ -1000,6 +1011,15 @@ const ThreadTitleRegenerationCompleteCommand = Schema.Struct({
   title: Schema.optional(TrimmedNonEmptyString),
 });
 
+const ThreadTurnCompletionAssessmentCompleteCommand = Schema.Struct({
+  type: Schema.Literal("thread.turn.completion-assessment.complete"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  turnId: TurnId,
+  outcome: TurnCompletionAssessmentOutcome,
+  summary: TrimmedNonEmptyString.check(Schema.isMaxLength(240)),
+});
+
 const InternalOrchestrationCommand = Schema.Union([
   ThreadSessionSetCommand,
   ThreadMessageAssistantDeltaCommand,
@@ -1009,6 +1029,7 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadActivityAppendCommand,
   ThreadRevertCompleteCommand,
   ThreadTitleRegenerationCompleteCommand,
+  ThreadTurnCompletionAssessmentCompleteCommand,
 ]);
 export type InternalOrchestrationCommand = typeof InternalOrchestrationCommand.Type;
 
@@ -1047,6 +1068,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.session-set",
   "thread.proposed-plan-upserted",
   "thread.turn-diff-completed",
+  "thread.turn-completion-assessed",
   "thread.activity-appended",
 ]);
 export type OrchestrationEventType = typeof OrchestrationEventType.Type;
@@ -1273,6 +1295,12 @@ export const ThreadTurnDiffCompletedPayload = Schema.Struct({
   completedAt: IsoDateTime,
 });
 
+export const ThreadTurnCompletionAssessedPayload = Schema.Struct({
+  threadId: ThreadId,
+  turnId: TurnId,
+  assessment: TurnCompletionAssessment,
+});
+
 export const ThreadActivityAppendedPayload = Schema.Struct({
   threadId: ThreadId,
   activity: OrchestrationThreadActivity,
@@ -1439,6 +1467,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.turn-diff-completed"),
     payload: ThreadTurnDiffCompletedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.turn-completion-assessed"),
+    payload: ThreadTurnCompletionAssessedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

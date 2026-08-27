@@ -16,11 +16,13 @@ import {
   buildCommitMessagePrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
+  buildTurnCompletionAssessmentPrompt,
 } from "./TextGenerationPrompts.ts";
 import {
   sanitizeCommitSubject,
   sanitizePrTitle,
   sanitizeThreadTitle,
+  sanitizeTurnCompletionAssessmentSummary,
 } from "./TextGenerationUtils.ts";
 import {
   applyCursorAcpModelSelection,
@@ -54,7 +56,8 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "assessTurnCompletion";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -259,10 +262,27 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  const assessTurnCompletion: TextGeneration.TextGeneration["Service"]["assessTurnCompletion"] =
+    Effect.fn("CursorTextGeneration.assessTurnCompletion")(function* (input) {
+      const { prompt, outputSchema } = buildTurnCompletionAssessmentPrompt(input);
+      const generated = yield* runCursorJson({
+        operation: "assessTurnCompletion",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+      return {
+        outcome: generated.outcome,
+        summary: sanitizeTurnCompletionAssessmentSummary(generated.summary, generated.outcome),
+      };
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    assessTurnCompletion,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

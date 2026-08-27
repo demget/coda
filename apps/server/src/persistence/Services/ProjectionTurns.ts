@@ -16,6 +16,7 @@ import {
   OrchestrationCheckpointStatus,
   ThreadId,
   TurnId,
+  TurnCompletionAssessment,
 } from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -48,6 +49,7 @@ export const ProjectionTurn = Schema.Struct({
   checkpointRef: Schema.NullOr(CheckpointRef),
   checkpointStatus: Schema.NullOr(OrchestrationCheckpointStatus),
   checkpointFiles: Schema.Array(OrchestrationCheckpointFile),
+  completionAssessment: Schema.optional(Schema.NullOr(TurnCompletionAssessment)),
 });
 export type ProjectionTurn = typeof ProjectionTurn.Type;
 
@@ -66,6 +68,7 @@ export const ProjectionTurnById = Schema.Struct({
   checkpointRef: Schema.NullOr(CheckpointRef),
   checkpointStatus: Schema.NullOr(OrchestrationCheckpointStatus),
   checkpointFiles: Schema.Array(OrchestrationCheckpointFile),
+  completionAssessment: Schema.optional(Schema.NullOr(TurnCompletionAssessment)),
 });
 export type ProjectionTurnById = typeof ProjectionTurnById.Type;
 
@@ -105,6 +108,14 @@ export const ClearCheckpointTurnConflictInput = Schema.Struct({
   checkpointTurnCount: NonNegativeInt,
 });
 export type ClearCheckpointTurnConflictInput = typeof ClearCheckpointTurnConflictInput.Type;
+
+export const SetProjectionTurnCompletionAssessmentInput = Schema.Struct({
+  threadId: ThreadId,
+  turnId: TurnId,
+  completionAssessment: TurnCompletionAssessment,
+});
+export type SetProjectionTurnCompletionAssessmentInput =
+  typeof SetProjectionTurnCompletionAssessmentInput.Type;
 
 export interface ProjectionTurnRepositoryShape {
   /**
@@ -154,6 +165,10 @@ export interface ProjectionTurnRepositoryShape {
    */
   readonly clearCheckpointTurnConflict: (
     input: ClearCheckpointTurnConflictInput,
+  ) => Effect.Effect<void, ProjectionRepositoryError>;
+
+  readonly setCompletionAssessment: (
+    input: SetProjectionTurnCompletionAssessmentInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
 
   /**

@@ -16,11 +16,13 @@ import {
   buildCommitMessagePrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
+  buildTurnCompletionAssessmentPrompt,
 } from "./TextGenerationPrompts.ts";
 import {
   sanitizeCommitSubject,
   sanitizePrTitle,
   sanitizeThreadTitle,
+  sanitizeTurnCompletionAssessmentSummary,
 } from "./TextGenerationUtils.ts";
 import { applyKimiAcpModelSelection, makeKimiAcpRuntime } from "../provider/acp/KimiAcpSupport.ts";
 
@@ -51,7 +53,8 @@ export const makeKimiTextGeneration = Effect.fn("makeKimiTextGeneration")(functi
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "assessTurnCompletion";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -252,10 +255,27 @@ export const makeKimiTextGeneration = Effect.fn("makeKimiTextGeneration")(functi
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  const assessTurnCompletion: TextGeneration.TextGeneration["Service"]["assessTurnCompletion"] =
+    Effect.fn("KimiTextGeneration.assessTurnCompletion")(function* (input) {
+      const { prompt, outputSchema } = buildTurnCompletionAssessmentPrompt(input);
+      const generated = yield* runKimiJson({
+        operation: "assessTurnCompletion",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+      return {
+        outcome: generated.outcome,
+        summary: sanitizeTurnCompletionAssessmentSummary(generated.summary, generated.outcome),
+      };
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    assessTurnCompletion,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

@@ -13,6 +13,7 @@ import {
 import { createModelSelection } from "@t3tools/shared/model";
 import {
   ApprovalRequestId,
+  CheckpointRef,
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   EventId,
@@ -150,6 +151,7 @@ describe("ProviderCommandReactor", () => {
     readonly requiresNewThreadForModelChange?: boolean;
     readonly titleRegenerationCompletionDispatchFailures?: number;
     readonly titleRegenerationBeforeStart?: "one" | "two";
+    readonly turnCompletionAnalysisEnabled?: boolean;
     readonly startSessionEffect?: (
       session: ProviderSession,
     ) => Effect.Effect<ProviderSession, ProviderAdapterRequestError>;
@@ -298,6 +300,14 @@ describe("ProviderCommandReactor", () => {
         }),
       ),
     );
+    const assessTurnCompletion = vi.fn<TextGenerationShape["assessTurnCompletion"]>((_) =>
+      Effect.fail(
+        new TextGenerationError({
+          operation: "assessTurnCompletion",
+          detail: "disabled in test harness",
+        }),
+      ),
+    );
     const providerSnapshots = [
       {
         instanceId: modelSelection.instanceId,
@@ -410,9 +420,14 @@ describe("ProviderCommandReactor", () => {
         Layer.mock(TextGeneration, {
           generateBranchName,
           generateThreadTitle,
+          assessTurnCompletion,
         }),
       ),
-      Layer.provideMerge(ServerSettingsService.layerTest()),
+      Layer.provideMerge(
+        ServerSettingsService.layerTest({
+          turnCompletionAnalysisEnabled: input?.turnCompletionAnalysisEnabled ?? false,
+        }),
+      ),
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), baseDir)),
       Layer.provideMerge(NodeServices.layer),
     );
@@ -502,6 +517,7 @@ describe("ProviderCommandReactor", () => {
       refreshStatus,
       generateBranchName,
       generateThreadTitle,
+      assessTurnCompletion,
       runtimeSessions,
       stateDir,
       drain,
@@ -550,6 +566,110 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.status).toBe("starting");
     expect(thread?.session?.runtimeMode).toBe("approval-required");
+  });
+
+  it("assesses the final assistant response after a completed turn", async () => {
+    const harness = await createHarness({ turnCompletionAnalysisEnabled: true });
+    const threadId = ThreadId.make("thread-1");
+    const turnId = asTurnId("turn-completion-analysis");
+    const userMessageId = asMessageId("user-message-completion-analysis");
+    const assistantMessageId = asMessageId("assistant-message-completion-analysis");
+    const createdAt = "2026-01-01T00:00:00.000Z";
+    harness.assessTurnCompletion.mockReturnValue(
+      Effect.succeed({
+        outcome: "needs_input",
+        summary: "The agent needs the deployment target.",
+      }),
+    );
+
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-completion-analysis"),
+        threadId,
+        message: {
+          messageId: userMessageId,
+          role: "user",
+          text: "Deploy the app to the correct environment.",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt,
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.delta",
+        commandId: CommandId.make("cmd-assistant-delta-completion-analysis"),
+        threadId,
+        messageId: assistantMessageId,
+        delta: "Which deployment environment should I use?",
+        turnId,
+        createdAt: "2026-01-01T00:00:01.000Z",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.message.assistant.complete",
+        commandId: CommandId.make("cmd-assistant-complete-completion-analysis"),
+        threadId,
+        messageId: assistantMessageId,
+        turnId,
+        createdAt: "2026-01-01T00:00:02.000Z",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-ready-completion-analysis"),
+        threadId,
+        session: {
+          threadId,
+          status: "ready",
+          providerName: "codex",
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: "2026-01-01T00:00:03.000Z",
+        },
+        createdAt: "2026-01-01T00:00:03.000Z",
+      }),
+    );
+    await harness.runEffect(
+      harness.engine.dispatch({
+        type: "thread.turn.diff.complete",
+        commandId: CommandId.make("cmd-diff-completion-analysis"),
+        threadId,
+        turnId,
+        completedAt: "2026-01-01T00:00:04.000Z",
+        checkpointRef: CheckpointRef.make("refs/coda/checkpoints/thread-1/turn/1"),
+        status: "ready",
+        files: [],
+        assistantMessageId,
+        checkpointTurnCount: 1,
+        createdAt: "2026-01-01T00:00:04.000Z",
+      }),
+    );
+
+    await waitFor(() => harness.assessTurnCompletion.mock.calls.length === 1);
+    await harness.drain();
+
+    expect(harness.assessTurnCompletion).toHaveBeenCalledWith({
+      cwd: "/tmp/provider-project",
+      task: "Deploy the app to the correct environment.",
+      response: "Which deployment environment should I use?",
+      modelSelection: expect.objectContaining({
+        instanceId: ProviderInstanceId.make("codex"),
+      }),
+    });
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === threadId);
+    expect(thread?.latestTurn?.completionAssessment).toEqual({
+      outcome: "needs_input",
+      summary: "The agent needs the deployment target.",
+      assessedAt: expect.any(String),
+    });
   });
 
   effectIt.effect("projects starting before a slow provider session finishes", () =>

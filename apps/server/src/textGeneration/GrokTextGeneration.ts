@@ -17,11 +17,13 @@ import {
   buildCommitMessagePrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
+  buildTurnCompletionAssessmentPrompt,
 } from "./TextGenerationPrompts.ts";
 import {
   sanitizeCommitSubject,
   sanitizePrTitle,
   sanitizeThreadTitle,
+  sanitizeTurnCompletionAssessmentSummary,
 } from "./TextGenerationUtils.ts";
 import {
   applyGrokAcpModelSelection,
@@ -52,7 +54,8 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "assessTurnCompletion";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -251,10 +254,27 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  const assessTurnCompletion: TextGeneration.TextGeneration["Service"]["assessTurnCompletion"] =
+    Effect.fn("GrokTextGeneration.assessTurnCompletion")(function* (input) {
+      const { prompt, outputSchema } = buildTurnCompletionAssessmentPrompt(input);
+      const generated = yield* runGrokJson({
+        operation: "assessTurnCompletion",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+      return {
+        outcome: generated.outcome,
+        summary: sanitizeTurnCompletionAssessmentSummary(generated.summary, generated.outcome),
+      };
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    assessTurnCompletion,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

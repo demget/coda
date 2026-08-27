@@ -150,6 +150,28 @@ describe("resolveThreadListV2Status", () => {
       "ready",
     );
   });
+
+  it("resolves needs-input for an assessed completed turn", () => {
+    const thread = makeThread({
+      id: ThreadId.make("t"),
+      title: "t",
+      latestTurn: {
+        turnId: TurnId.make("turn-1"),
+        state: "completed",
+        assistantMessageId: MessageId.make("assistant-1"),
+        requestedAt: NOW,
+        startedAt: NOW,
+        completedAt: NOW,
+        completionAssessment: {
+          outcome: "needs_input",
+          summary: "The agent needs a target environment.",
+          assessedAt: NOW,
+        },
+      },
+    });
+
+    expect(resolveThreadListV2Status(thread)).toBe("needs-input");
+  });
 });
 
 describe("resolveThreadListV2SwipeActions", () => {

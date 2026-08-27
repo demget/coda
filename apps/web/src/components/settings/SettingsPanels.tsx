@@ -35,6 +35,7 @@ import {
 } from "@t3tools/contracts/settings";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import { createModelSelection } from "@t3tools/shared/model";
+import { resolveTurnCompletionAnalysisModelSelection } from "@t3tools/shared/serverSettings";
 import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
@@ -444,6 +445,13 @@ export function useSettingsRestore(onRestored?: () => void) {
     settings.textGenerationModelSelection ?? null,
     DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
   );
+  const isTurnCompletionAnalysisDirty =
+    settings.turnCompletionAnalysisEnabled !==
+      DEFAULT_UNIFIED_SETTINGS.turnCompletionAnalysisEnabled ||
+    !Equal.equals(
+      settings.turnCompletionAnalysisModelSelection,
+      DEFAULT_UNIFIED_SETTINGS.turnCompletionAnalysisModelSelection,
+    );
   const isBackgroundActivityDirty = hasChangedBackgroundActivitySettings(settings);
 
   const changedSettingLabels = useMemo(
@@ -514,9 +522,11 @@ export function useSettingsRestore(onRestored?: () => void) {
         ? ["Delete confirmation"]
         : []),
       ...(isTextGenerationModelDirty ? ["Text generation model"] : []),
+      ...(isTurnCompletionAnalysisDirty ? ["Turn completion analysis"] : []),
     ],
     [
       isTextGenerationModelDirty,
+      isTurnCompletionAnalysisDirty,
       isBackgroundActivityDirty,
       settings.confirmThreadArchive,
       settings.confirmThreadDelete,
@@ -630,6 +640,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       confirmThreadArchive: DEFAULT_UNIFIED_SETTINGS.confirmThreadArchive,
       confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
+      turnCompletionAnalysisEnabled: DEFAULT_UNIFIED_SETTINGS.turnCompletionAnalysisEnabled,
+      turnCompletionAnalysisModelSelection:
+        DEFAULT_UNIFIED_SETTINGS.turnCompletionAnalysisModelSelection,
       fontFamilySans: DEFAULT_UNIFIED_SETTINGS.fontFamilySans,
       fontFamilyComposer: DEFAULT_UNIFIED_SETTINGS.fontFamilyComposer,
       fontFamilyCode: DEFAULT_UNIFIED_SETTINGS.fontFamilyCode,
@@ -1711,6 +1724,29 @@ export function GeneralSettingsPanel() {
     settings.textGenerationModelSelection ?? null,
     DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
   );
+  const usesDedicatedCompletionAnalysisModel =
+    settings.turnCompletionAnalysisModelSelection !== null;
+  const canResetTurnCompletionAnalysis =
+    settings.turnCompletionAnalysisEnabled !==
+      DEFAULT_UNIFIED_SETTINGS.turnCompletionAnalysisEnabled ||
+    !Equal.equals(
+      settings.turnCompletionAnalysisModelSelection,
+      DEFAULT_UNIFIED_SETTINGS.turnCompletionAnalysisModelSelection,
+    );
+  const resolvedCompletionAnalysisSelection = resolveTurnCompletionAnalysisModelSelection(
+    settings,
+    serverProviders,
+  );
+  const completionAnalysisSelection =
+    resolvedCompletionAnalysisSelection === settings.textGenerationModelSelection
+      ? textGenerationModelSelection
+      : resolvedCompletionAnalysisSelection;
+  const completionAnalysisModelOptionsByInstance = getCustomModelOptionsByInstance(
+    settings,
+    serverProviders,
+    completionAnalysisSelection.instanceId,
+    completionAnalysisSelection.model,
+  );
   const resolvedBackgroundActivity = resolveServerBackgroundActivitySettings(settings);
   const activeBackgroundActivityProfile = resolvedBackgroundActivity.profile;
   const backgroundActivityProfileOption = resolveBackgroundActivityProfileOption(settings);
@@ -2211,6 +2247,81 @@ export function GeneralSettingsPanel() {
             </div>
           }
         />
+
+        <SettingsRow
+          {...searchableSetting("turn-completion-analysis")}
+          description="After a successful turn, uses a text generation model to distinguish work the agent reports as implemented from work that still needs your input."
+          resetAction={
+            canResetTurnCompletionAnalysis ? (
+              <SettingResetButton
+                label="turn completion analysis"
+                onClick={() =>
+                  updateSettings({
+                    turnCompletionAnalysisEnabled:
+                      DEFAULT_UNIFIED_SETTINGS.turnCompletionAnalysisEnabled,
+                    turnCompletionAnalysisModelSelection:
+                      DEFAULT_UNIFIED_SETTINGS.turnCompletionAnalysisModelSelection,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.turnCompletionAnalysisEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ turnCompletionAnalysisEnabled: Boolean(checked) })
+              }
+              aria-label="Analyze completed turns"
+            />
+          }
+        />
+
+        {settings.turnCompletionAnalysisEnabled ? (
+          <SettingsRow
+            title="Completion analysis model"
+            description="Optional model override for completion analysis. Off uses the global text generation model."
+            control={
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {usesDedicatedCompletionAnalysisModel ? (
+                  <ProviderModelPicker
+                    activeInstanceId={completionAnalysisSelection.instanceId}
+                    model={completionAnalysisSelection.model}
+                    lockedProvider={null}
+                    instanceEntries={textGenerationModelInstanceEntries}
+                    modelOptionsByInstance={completionAnalysisModelOptionsByInstance}
+                    triggerVariant="outline"
+                    triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
+                    triggerAriaLabel="Completion analysis model"
+                    onInstanceModelChange={(instanceId, model) =>
+                      updateSettings({
+                        turnCompletionAnalysisModelSelection: createModelSelection(
+                          instanceId,
+                          model,
+                        ),
+                      })
+                    }
+                  />
+                ) : null}
+                <Switch
+                  checked={usesDedicatedCompletionAnalysisModel}
+                  onCheckedChange={(checked) =>
+                    updateSettings({
+                      turnCompletionAnalysisModelSelection: checked
+                        ? createModelSelection(
+                            textGenerationModelSelection.instanceId,
+                            textGenerationModelSelection.model,
+                            textGenerationModelSelection.options,
+                          )
+                        : null,
+                    })
+                  }
+                  aria-label="Use a separate completion analysis model"
+                />
+              </div>
+            }
+          />
+        ) : null}
       </SettingsSection>
 
       <SettingsSection title="Voice input">

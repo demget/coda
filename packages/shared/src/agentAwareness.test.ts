@@ -131,6 +131,34 @@ describe("projectThreadAwareness", () => {
     expect(trulyInterrupted).toBeNull();
   });
 
+  it("projects a completion assessment that still needs input", () => {
+    const state = projectThreadAwareness({
+      environmentId: "env-1" as EnvironmentId,
+      project,
+      thread: thread({
+        latestTurn: {
+          turnId: "turn-1" as TurnId,
+          state: "completed",
+          requestedAt: NOW,
+          startedAt: NOW,
+          completedAt: NOW,
+          assistantMessageId: null,
+          completionAssessment: {
+            outcome: "needs_input",
+            summary: "The agent needs a target environment.",
+            assessedAt: NOW,
+          },
+        },
+      }),
+    });
+
+    expect(state).toMatchObject({
+      phase: "waiting_for_input",
+      headline: "Waiting for input",
+      detail: "The agent needs a target environment.",
+    });
+  });
+
   it("projects ready sessions with no materialized turn as completed", () => {
     // Quick threads without code changes never get a checkpoint, so the SQL
     // shell has no latestTurn row and latest_turn_id is cleared when the
