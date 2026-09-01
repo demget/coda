@@ -515,17 +515,39 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
     supportsSpanPropagation: true,
   });
 
+  // JSON-RPC 2.0 notifications must omit `id` entirely. The shared RPC
+  // serializer encodes every `Request` with its `id` (empty string for
+  // notifications) plus a non-standard `headers` field, which peers reading
+  // JSON-RPC strictly treat as a malformed request instead of a notification
+  // — cursor-agent drops `session/cancel` sent that way and keeps running.
+  // Encode the notification frame directly instead.
   const sendNotification = Effect.fn("sendNotification")(function* (
     method: string,
     payload: unknown,
   ) {
-    yield* offerOutgoing({
-      _tag: "Request",
-      id: "",
-      tag: method,
-      payload,
-      headers: [],
+    const message = {
+      jsonrpc: "2.0",
+      method,
+      ...(payload === undefined ? {} : { params: payload }),
+    };
+    yield* logProtocol({
+      direction: "outgoing",
+      stage: "decoded",
+      payload: message,
     });
+    const encoded = yield* Effect.try({
+      // Raw JSON.stringify keeps the exact wire frame and surfaces the raw
+      // TypeError cause on unserializable payloads, matching request encoding.
+      // @effect-diagnostics-next-line preferSchemaOverJson:off
+      try: () => `${JSON.stringify(message)}\n`,
+      catch: (cause) => AcpError.AcpProtocolParseError.fromEncodingError(method, undefined, cause),
+    });
+    yield* logProtocol({
+      direction: "outgoing",
+      stage: "raw",
+      payload: encoded,
+    });
+    yield* Queue.offer(outgoing, encoded).pipe(Effect.asVoid);
   });
 
   const sendRequest = Effect.fn("sendRequest")(function* (method: string, payload: unknown) {
