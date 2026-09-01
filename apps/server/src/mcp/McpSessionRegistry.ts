@@ -68,7 +68,9 @@ export interface McpSessionRegistryOptions {
  *
  * The bound matters because `/mcp` is mounted outside the environment auth
  * stack and is reachable on whatever host the server binds to, so this token is
- * the only thing guarding the preview toolkit on a remote-reachable server.
+ * the only thing guarding the toolkits on a remote-reachable server — the
+ * preview browser and, through the thread toolkit, every thread transcript in
+ * the environment.
  */
 const DEFAULT_LIVENESS_WINDOW_MS = 24 * 60 * 60 * 1_000;
 
@@ -128,7 +130,7 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         threadId: ThreadId.make(request.threadId),
         providerSessionId,
         providerInstanceId: ProviderInstanceId.make(request.providerInstanceId),
-        capabilities: new Set(["preview"]),
+        capabilities: new Set(["preview", "thread"]),
         issuedAt,
       };
       yield* SynchronizedRef.update(state, ({ records }) => {

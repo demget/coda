@@ -112,6 +112,14 @@ scoped adapter; `ProviderInstanceRegistry` owns live instances and `ProviderAdap
 an instance to its adapter, so `ProviderService` routes session and turn operations without knowing
 which agent is behind them. See [providers.md](./providers.md).
 
+## The agent-facing MCP server
+
+Coda serves its own MCP server at `/mcp` ([`McpHttpServer.ts`][mcp]) and registers it with every provider adapter as `t3-code`, so an agent running in a thread can call back into the product. Each session gets its own bearer credential from [`McpSessionRegistry.ts`][mcpsessions], which resolves the token to an `McpInvocationScope` — environment, thread, provider session, and a capability set. `/mcp` is mounted outside the environment auth stack, so that token is the only thing guarding these tools on a remote-reachable server; credentials are revoked when a session stops and expire after a day without a sign of life.
+
+Two toolkits live under `mcp/toolkits/`. `preview` drives the collaborative browser and needs a desktop host on the other end. `thread` reads history — `thread_search` finds earlier threads by what was said in them, and `thread_read` renders one as a transcript, defaulting to the caller's own thread so an agent can recover its context without knowing its thread id. Both read through `ProjectionSnapshotQuery`, the same service behind the WebSocket and HTTP snapshot reads, and both are read-only: nothing in the MCP surface dispatches an orchestration command.
+
+Thread reads are bounded twice over, because a transcript is a context-window expense: `turnLimit` pages the read (walk further back with the returned `beforeCursor`), and the renderer caps the rendered text, dropping the oldest entries and reporting `truncated`. Tool activity is off by default — completions outnumber messages by an order of magnitude in a real database — and errors always render, with or without it.
+
 ## Checkpointing
 
 Each turn is bracketed by workspace checkpoints so diffs and reverts are exact. `CheckpointStore`
@@ -150,3 +158,5 @@ already dispatch.
 [checkpoint]: ../../apps/server/src/orchestration/Layers/CheckpointReactor.ts
 [receipts]: ../../apps/server/src/orchestration/Layers/RuntimeReceiptBus.ts
 [drivers]: ../../apps/server/src/provider/builtInDrivers.ts
+[mcp]: ../../apps/server/src/mcp/McpHttpServer.ts
+[mcpsessions]: ../../apps/server/src/mcp/McpSessionRegistry.ts

@@ -1,19 +1,29 @@
 import { expect, it } from "@effect/vitest";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { EnvironmentId, PreviewTabId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  MessageId,
+  PreviewTabId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import { McpProtocol, McpSchema, McpServer } from "effect/unstable/ai";
 import { HttpBody, HttpClient, HttpRouter, HttpServerResponse } from "effect/unstable/http";
 
+import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as McpHttpServer from "./McpHttpServer.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
 
 const environmentId = EnvironmentId.make("environment-mcp-test");
 const threadId = ThreadId.make("thread-mcp-test");
+const projectId = ProjectId.make("project-mcp-test");
 const tabId = PreviewTabId.make("tab-mcp-test");
 const alternateTabId = PreviewTabId.make("tab-mcp-alternate");
 const invocation = {
@@ -285,4 +295,113 @@ it.effect("registers annotated tools and preserves authenticated request context
       }
     }),
   ).pipe(Effect.provide(TestLayer)),
+);
+
+const threadProjections = Layer.succeed(ProjectionSnapshotQuery, {
+  getThreadDetailSnapshot: (requestedThreadId: ThreadId) =>
+    Effect.succeed(
+      Option.some({
+        snapshotSequence: 7,
+        thread: {
+          id: requestedThreadId,
+          projectId,
+          title: "Read Coda Threads by Agent",
+          modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+          runtimeMode: "auto",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          latestTurn: null,
+          createdAt: "2026-08-12T00:00:00.000Z",
+          updatedAt: "2026-08-12T00:41:00.000Z",
+          archivedAt: null,
+          settledOverride: null,
+          settledAt: null,
+          deletedAt: null,
+          messages: [
+            {
+              id: MessageId.make("message-mcp-test"),
+              role: "user",
+              text: "is there a convenient way to read a Coda thread",
+              turnId: null,
+              streaming: false,
+              createdAt: "2026-08-12T00:39:00.000Z",
+              updatedAt: "2026-08-12T00:39:00.000Z",
+            },
+          ],
+          proposedPlans: [],
+          activities: [],
+          checkpoints: [],
+          session: null,
+        },
+      }),
+    ),
+  getProjectShellById: () =>
+    Effect.succeed(
+      Option.some({
+        id: projectId,
+        title: "coda",
+        workspaceRoot: "/Users/dem/Projects/coda",
+        defaultModelSelection: null,
+        scripts: [],
+        createdAt: "2026-08-01T00:00:00.000Z",
+        updatedAt: "2026-08-12T00:41:00.000Z",
+      }),
+    ),
+} as unknown as ProjectionSnapshotQuery["Service"]);
+
+const ThreadTestLayer = McpHttpServer.ThreadToolkitRegistrationLive.pipe(
+  Layer.provideMerge(McpServer.McpServer.layer),
+  Layer.provideMerge(threadProjections),
+);
+
+it.effect("serves the thread toolkit as read-only tools over the MCP server", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const server = yield* McpServer.McpServer;
+
+      const readTool = server.tools.find(({ tool }) => tool.name === "thread_read");
+      expect(readTool?.tool.annotations?.readOnlyHint).toBe(true);
+      expect(readTool?.tool.annotations?.destructiveHint).toBe(false);
+      expect(readTool?.tool.annotations?.openWorldHint).toBe(false);
+      expect(server.tools.some(({ tool }) => tool.name === "thread_search")).toBe(true);
+
+      const read = yield* server.callTool({ name: "thread_read", arguments: {} }).pipe(
+        Effect.provideService(McpInvocationContext.McpInvocationContext, {
+          ...invocation,
+          capabilities: new Set(["preview", "thread"] as const),
+        }),
+        Effect.provideService(McpSchema.McpServerClient, client),
+      );
+
+      expect(read.isError).toBe(false);
+      expect(read.structuredContent).toMatchObject({
+        threadId,
+        title: "Read Coda Threads by Agent",
+        projectTitle: "coda",
+        messageCount: 1,
+        truncated: false,
+        hasMore: false,
+      });
+    }),
+  ).pipe(Effect.provide(ThreadTestLayer)),
+);
+
+it.effect("rejects a thread read from a credential without the capability", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const server = yield* McpServer.McpServer;
+      const read = yield* server
+        .callTool({ name: "thread_read", arguments: {} })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+
+      expect(read.isError).toBe(true);
+      expect(read.content).toEqual([
+        { type: "text", text: "MCP credential does not grant the thread capability." },
+      ]);
+    }),
+  ).pipe(Effect.provide(ThreadTestLayer)),
 );
