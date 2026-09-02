@@ -12,4 +12,13 @@ describe("provider driver metadata", () => {
     expect(definition?.settingsSchema.fields).toHaveProperty("binaryPath");
     expect(definition?.icon).toBeTypeOf("function");
   });
+
+  it("registers Antigravity with its settings schema and early-access presentation", () => {
+    const definition = PROVIDER_CLIENT_DEFINITION_BY_VALUE[ProviderDriverKind.make("antigravity")];
+
+    expect(definition?.label).toBe("Antigravity");
+    expect(definition?.badgeLabel).toBe("Early Access");
+    expect(definition?.settingsSchema.fields).toHaveProperty("binaryPath");
+    expect(definition?.icon).toBeTypeOf("function");
+  });
 });
