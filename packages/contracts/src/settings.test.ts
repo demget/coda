@@ -203,11 +203,6 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
       binaryPath: "kimi",
       customModels: [],
     });
-    expect(decoded.providers.antigravity).toEqual({
-      enabled: true,
-      binaryPath: "agy_acp_server",
-      customModels: [],
-    });
   });
 
   it("decodes a multi-instance map mixing first-party and fork drivers", () => {

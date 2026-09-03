@@ -10,7 +10,7 @@
  *
  *  2. **Many drivers, one registry** — the "all drivers slice" describe
  *     block below configures one instance of every shipped driver
- *     (`codex`, `claudeAgent`, `cursor`, `grok`, `kimi`, `antigravity`, `opencode`) in a single
+ *     (`codex`, `claudeAgent`, `cursor`, `grok`, `kimi`, `opencode`) in a single
  *     `ProviderInstanceConfigMap` and asserts the registry boots them all
  *     without cross-contamination. This proves the driver SPI is uniform
  *     across every provider — any driver plugs into the registry through
@@ -18,15 +18,13 @@
  *
  * Every instance in these tests is configured with `enabled: false` so the
  * provider-status checks short-circuit to pending/disabled snapshots
- * without trying to spawn real `codex` / `claude` / `agent` / `grok` / `kimi` /
- * `agy_acp_server` / `opencode`
+ * without trying to spawn real `codex` / `claude` / `agent` / `grok` / `kimi` / `opencode`
  * binaries. That keeps the assertions focused on registry routing
  * behaviour rather than the runtime details of each provider.
  */
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
-  type AntigravitySettings,
   type ClaudeSettings,
   type CodexSettings,
   type CursorSettings,
@@ -47,7 +45,6 @@ import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import type { BuiltInDriversEnv } from "../builtInDrivers.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
-import { AntigravityDriver } from "../Drivers/AntigravityDriver.ts";
 import { ClaudeDriver } from "../Drivers/ClaudeDriver.ts";
 import { CodexDriver } from "../Drivers/CodexDriver.ts";
 import { CursorDriver } from "../Drivers/CursorDriver.ts";
@@ -135,13 +132,6 @@ const makeGrokConfig = (overrides: Partial<GrokSettings>): GrokSettings => ({
 const makeKimiConfig = (overrides: Partial<KimiSettings>): KimiSettings => ({
   enabled: false,
   binaryPath: "kimi",
-  customModels: [],
-  ...overrides,
-});
-
-const makeAntigravityConfig = (overrides: Partial<AntigravitySettings>): AntigravitySettings => ({
-  enabled: false,
-  binaryPath: "agy_acp_server",
   customModels: [],
   ...overrides,
 });
@@ -345,7 +335,6 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
       const cursorId = ProviderInstanceId.make("cursor_default");
       const grokId = ProviderInstanceId.make("grok_default");
       const kimiId = ProviderInstanceId.make("kimi_default");
-      const antigravityId = ProviderInstanceId.make("antigravity_default");
       const openCodeId = ProviderInstanceId.make("opencode_default");
 
       const codexDriverKind = ProviderDriverKind.make("codex");
@@ -353,7 +342,6 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
       const cursorDriverKind = ProviderDriverKind.make("cursor");
       const grokDriverKind = ProviderDriverKind.make("grok");
       const kimiDriverKind = ProviderDriverKind.make("kimi");
-      const antigravityDriverKind = ProviderDriverKind.make("antigravity");
       const openCodeDriverKind = ProviderDriverKind.make("opencode");
 
       const configMap: ProviderInstanceConfigMap = {
@@ -390,12 +378,6 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
           enabled: false,
           config: makeKimiConfig({}),
         },
-        [antigravityId]: {
-          driver: antigravityDriverKind,
-          displayName: "Antigravity",
-          enabled: false,
-          config: makeAntigravityConfig({}),
-        },
         [openCodeId]: {
           driver: openCodeDriverKind,
           displayName: "OpenCode",
@@ -405,15 +387,7 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
       };
 
       const { registry } = yield* makeProviderInstanceRegistry<BuiltInDriversEnv>({
-        drivers: [
-          CodexDriver,
-          ClaudeDriver,
-          CursorDriver,
-          GrokDriver,
-          KimiDriver,
-          AntigravityDriver,
-          OpenCodeDriver,
-        ],
+        drivers: [CodexDriver, ClaudeDriver, CursorDriver, GrokDriver, KimiDriver, OpenCodeDriver],
         configMap,
       });
 
@@ -423,9 +397,9 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
       expect(unavailable).toEqual([]);
 
       const instances = yield* registry.listInstances;
-      expect(instances).toHaveLength(7);
+      expect(instances).toHaveLength(6);
       expect(instances.map((instance) => instance.instanceId).toSorted()).toEqual(
-        [codexId, claudeId, cursorId, grokId, kimiId, antigravityId, openCodeId].toSorted(),
+        [codexId, claudeId, cursorId, grokId, kimiId, openCodeId].toSorted(),
       );
 
       // Instance lookup by id resolves each instance to its own bundle —
@@ -436,21 +410,18 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
       const cursor = yield* registry.getInstance(cursorId);
       const grok = yield* registry.getInstance(grokId);
       const kimi = yield* registry.getInstance(kimiId);
-      const antigravity = yield* registry.getInstance(antigravityId);
       const openCode = yield* registry.getInstance(openCodeId);
       expect(codex?.driverKind).toBe(codexDriverKind);
       expect(claude?.driverKind).toBe(claudeDriverKind);
       expect(cursor?.driverKind).toBe(cursorDriverKind);
       expect(grok?.driverKind).toBe(grokDriverKind);
       expect(kimi?.driverKind).toBe(kimiDriverKind);
-      expect(antigravity?.driverKind).toBe(antigravityDriverKind);
       expect(openCode?.driverKind).toBe(openCodeDriverKind);
       expect(codex?.displayName).toBe("Codex");
       expect(claude?.displayName).toBe("Claude");
       expect(cursor?.displayName).toBe("Cursor");
       expect(grok?.displayName).toBe("Grok");
       expect(kimi?.displayName).toBe("Kimi");
-      expect(antigravity?.displayName).toBe("Antigravity");
       expect(openCode?.displayName).toBe("OpenCode");
 
       // Every instance owns its own set of closures — no sharing across

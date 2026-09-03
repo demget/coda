@@ -165,13 +165,6 @@ describe("model slug normalization", () => {
       "kimi-code/kimi-for-coding-highspeed",
     );
   });
-
-  it("maps the Antigravity CLI id for Gemini 3.1 Pro (High) to the ACP id", () => {
-    const antigravity = ProviderDriverKind.make("antigravity");
-
-    expect(normalizeModelSlug("gemini-3.1-pro-high", antigravity)).toBe("gemini-pro-agent");
-    expect(normalizeModelSlug("gemini-3.8-flash-high", antigravity)).toBe("gemini-3.8-flash-high");
-  });
 });
 
 describe("applyClaudePromptEffortPrefix", () => {

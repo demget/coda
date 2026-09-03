@@ -165,33 +165,6 @@ describe("mobile model options", () => {
     expect(option?.subtitle).toBe("Kimi");
   });
 
-  it("uses the Antigravity display name for the default Antigravity instance", () => {
-    const config = {
-      providers: [
-        {
-          instanceId: "antigravity",
-          driver: "antigravity",
-          enabled: true,
-          installed: true,
-          auth: { status: "authenticated" },
-          models: [
-            {
-              slug: "gemini-3.7-flash-high",
-              name: "Gemini 3.7 Flash (High)",
-              isCustom: false,
-              capabilities: { optionDescriptors: [] },
-            },
-          ],
-        },
-      ],
-    } as unknown as ServerConfig;
-
-    const [option] = buildModelOptions(config, null);
-
-    expect(option?.providerLabel).toBe("Antigravity");
-    expect(option?.subtitle).toBe("Antigravity");
-  });
-
   it("keeps legacy models out of implicit defaults", () => {
     const config = {
       providers: [

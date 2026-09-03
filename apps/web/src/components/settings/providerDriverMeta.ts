@@ -1,5 +1,4 @@
 import {
-  AntigravitySettings,
   ClaudeSettings,
   CodexSettings,
   CursorSettings,
@@ -10,7 +9,6 @@ import {
 } from "@t3tools/contracts";
 import type * as Schema from "effect/Schema";
 import {
-  AntigravityIcon,
   ClaudeAI,
   CursorIcon,
   GrokIcon,
@@ -78,13 +76,6 @@ export const PROVIDER_CLIENT_DEFINITIONS: readonly ProviderClientDefinition[] = 
     icon: KimiIcon,
     badgeLabel: "Early Access",
     settingsSchema: KimiSettings,
-  },
-  {
-    value: ProviderDriverKind.make("antigravity"),
-    label: "Antigravity",
-    icon: AntigravityIcon,
-    badgeLabel: "Early Access",
-    settingsSchema: AntigravitySettings,
   },
   {
     value: ProviderDriverKind.make("opencode"),

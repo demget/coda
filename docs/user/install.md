@@ -54,18 +54,17 @@ yay -S t3code-nightly-bin
 Coda drives provider CLIs; it does not ship them. Install the CLI for each provider you want
 to use, then authenticate it.
 
-| Provider    | CLI                                                           | Default binary   | Log in with                                |
-| ----------- | ------------------------------------------------------------- | ---------------- | ------------------------------------------ |
-| Codex       | [Codex CLI](https://developers.openai.com/codex/cli)          | `codex`          | `codex login`                              |
-| Claude      | [Claude Code](https://claude.com/product/claude-code)         | `claude`         | `claude auth login`                        |
-| Cursor      | [Cursor CLI](https://cursor.com/cli)                          | `cursor-agent`   | `agent login`                              |
-| Grok Build  | [Grok Build CLI](https://x.ai/cli)                            | `grok`           | `grok login`                               |
-| Kimi        | [Kimi Code CLI](https://github.com/MoonshotAI/kimi-code)      | `kimi`           | `kimi login`                               |
-| Antigravity | [Antigravity](https://antigravity.google/docs/ide/extensions) | `agy_acp_server` | Google sign-in in the browser on first use |
-| OpenCode    | [OpenCode](https://opencode.ai)                               | `opencode`       | `opencode auth login`                      |
+| Provider   | CLI                                                      | Default binary | Log in with           |
+| ---------- | -------------------------------------------------------- | -------------- | --------------------- |
+| Codex      | [Codex CLI](https://developers.openai.com/codex/cli)     | `codex`        | `codex login`         |
+| Claude     | [Claude Code](https://claude.com/product/claude-code)    | `claude`       | `claude auth login`   |
+| Cursor     | [Cursor CLI](https://cursor.com/cli)                     | `cursor-agent` | `agent login`         |
+| Grok Build | [Grok Build CLI](https://x.ai/cli)                       | `grok`         | `grok login`          |
+| Kimi       | [Kimi Code CLI](https://github.com/MoonshotAI/kimi-code) | `kimi`         | `kimi login`          |
+| OpenCode   | [OpenCode](https://opencode.ai)                          | `opencode`     | `opencode auth login` |
 
-Codex, Claude, Kimi, and Antigravity are on by default. Cursor, Grok Build, and OpenCode are off
-by default; turn them on in **Settings** → the provider's card when you want to use them.
+Codex and Claude are on by default. Cursor, Grok Build, and OpenCode are off by default; turn
+them on in **Settings** → the provider's card when you want to use them.
 
 Cursor is the one to watch: install Cursor CLI, which provides the `cursor-agent` binary that
 Coda looks for, but authenticate with `agent login`, not `cursor-agent login`.
@@ -73,16 +72,6 @@ Coda looks for, but authenticate with `agent login`, not `cursor-agent login`.
 Grok models that support adjustable reasoning show a **Reasoning** control beside the model picker.
 The available levels and default come from the installed Grok Build CLI, so they can vary by model
 and CLI version.
-
-Antigravity is the other exception: Google does not ship a standalone `agy_acp_server`
-installer. Download the archive for your platform from the
-[ACP registry entry](https://github.com/agentclientprotocol/registry/tree/main/antigravity-acp)
-(the same binaries Zed installs), extract it, and put the binary on the server's `PATH` or set
-**Binary path** on the Antigravity card in Settings. The first time Coda starts the server it
-opens a Google sign-in in your browser; the server caches that login itself and Coda never
-handles your credentials. Set `GEMINI_API_KEY` in the server's environment to use a Gemini API
-key instead. Coda is not one of Google's listed Antigravity clients, so use this provider at your
-own discretion.
 
 Run the login command on the machine running the Coda server, not on the device you browse
 from.

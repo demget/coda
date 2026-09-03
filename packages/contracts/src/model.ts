@@ -132,7 +132,6 @@ const CLAUDE_DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
 const CURSOR_DRIVER_KIND = ProviderDriverKind.make("cursor");
 const GROK_DRIVER_KIND = ProviderDriverKind.make("grok");
 const KIMI_DRIVER_KIND = ProviderDriverKind.make("kimi");
-const ANTIGRAVITY_DRIVER_KIND = ProviderDriverKind.make("antigravity");
 const OPENCODE_DRIVER_KIND = ProviderDriverKind.make("opencode");
 
 export const DEFAULT_MODEL = "gpt-5.6-sol";
@@ -155,7 +154,6 @@ export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, strin
   [CURSOR_DRIVER_KIND]: "auto",
   [GROK_DRIVER_KIND]: "grok-build",
   [KIMI_DRIVER_KIND]: "kimi-code/k3",
-  [ANTIGRAVITY_DRIVER_KIND]: "gemini-3.7-flash-high",
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
 };
 
@@ -224,11 +222,6 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Partial<
     "kimi-for-coding": "kimi-code/kimi-for-coding",
     "kimi-for-coding-highspeed": "kimi-code/kimi-for-coding-highspeed",
   },
-  // The Antigravity ACP server names Gemini 3.1 Pro (High) `gemini-pro-agent`
-  // while the CLI lists it as `gemini-3.1-pro-high`. Accept the CLI id.
-  [ANTIGRAVITY_DRIVER_KIND]: {
-    "gemini-3.1-pro-high": "gemini-pro-agent",
-  },
   [OPENCODE_DRIVER_KIND]: {},
 };
 
@@ -240,6 +233,5 @@ export const PROVIDER_DISPLAY_NAMES: Partial<Record<ProviderDriverKind, string>>
   [CURSOR_DRIVER_KIND]: "Cursor",
   [GROK_DRIVER_KIND]: "Grok",
   [KIMI_DRIVER_KIND]: "Kimi",
-  [ANTIGRAVITY_DRIVER_KIND]: "Antigravity",
   [OPENCODE_DRIVER_KIND]: "OpenCode",
 };
