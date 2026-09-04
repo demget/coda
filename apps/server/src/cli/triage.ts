@@ -29,7 +29,7 @@ import { Command, Flag } from "effect/unstable/cli";
 import packageJson from "../../package.json" with { type: "json" };
 import * as ServerConfig from "../config.ts";
 import { resolveBaseDir } from "../os-jank.ts";
-import { readPersistedServerRuntimeState } from "../serverRuntimeState.ts";
+import { isProcessAlive, readPersistedServerRuntimeState } from "../serverRuntimeState.ts";
 import { baseDirFlag } from "./config.ts";
 import { resolveCliCommand } from "./invocation.ts";
 import {
@@ -75,17 +75,6 @@ export class TriageAgentSpawnError extends Schema.TaggedErrorClass<TriageAgentSp
     return `Could not start \`${this.command}\`.`;
   }
 }
-
-// signal 0 delivers nothing; it only reports whether the pid exists. EPERM
-// means it exists but belongs to another user, which still counts as alive.
-const isProcessAlive = (pid: number): boolean => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error instanceof Error && "code" in error && error.code === "EPERM";
-  }
-};
 
 /** One human-readable line about the local server, for `context.md`. */
 const describeServerProcess = Effect.fn("triage.describeServerProcess")(function* (
@@ -169,7 +158,7 @@ export const triageCommand = Command.make("triage", {
   model: modelFlag,
 }).pipe(
   Command.withDescription(
-    "Investigate a T3 Code problem on this machine with claude or codex, and help file a good issue.",
+    "Investigate a Coda problem on this machine with claude or codex, and help file a good issue.",
   ),
   Command.withHandler((flags) =>
     Effect.gen(function* () {

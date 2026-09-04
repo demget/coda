@@ -6,6 +6,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -53,10 +56,7 @@ jobs:
         run: vp run build:desktop
 
       - name: Verify preload bundle output
-        run: |
-          test -f apps/desktop/dist-electron/preload.cjs
-          grep -nE "desktopBridge|getLocalEnvironmentBootstrap|PICK_FOLDER_CHANNEL|wsUrl" apps/desktop/dist-electron/preload.cjs
-          grep -n "__clerk_internal_electron_passkeys" apps/desktop/dist-electron/preload.cjs
+        run: node apps/desktop/scripts/verify-preload-bundle.mjs
 
   # Everything except `t3` (apps/server). `--parallel` drops the package
   # dependency ordering that `vp run` applies by default: these `test` tasks
@@ -123,8 +123,8 @@ jobs:
       # job, which covers @t3tools/desktop, needs the download.
       - name: Test
         env:
-          T3CODE_TRANSFER_BUDGET_REPORT_PATH: ${{ runner.temp }}/t3code-transfer-budget.md
-          T3CODE_TRANSFER_BUDGET_RESULT_PATH: ${{ runner.temp }}/thread-transfer-result.json
+          CODA_TRANSFER_BUDGET_REPORT_PATH: ${{ runner.temp }}/t3code-transfer-budget.md
+          CODA_TRANSFER_BUDGET_RESULT_PATH: ${{ runner.temp }}/thread-transfer-result.json
         run: vp run --filter t3 test --shard ${{ matrix.shard }}/${{ strategy.job-total }}
 
       # src/server.test.ts writes the budget report, so exactly one shard

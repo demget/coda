@@ -37,7 +37,9 @@ export type ModelPickerJumpKeybindingCommand =
 export const THREAD_KEYBINDING_COMMANDS = [
   "thread.previous",
   "thread.next",
+  "thread.copyReference",
   "thread.settle",
+  "thread.pin",
   ...THREAD_JUMP_KEYBINDING_COMMANDS,
 ] as const;
 export type ThreadKeybindingCommand = (typeof THREAD_KEYBINDING_COMMANDS)[number];
@@ -58,6 +60,7 @@ export const STATIC_KEYBINDING_COMMANDS = [
   "rightPanel.toggle",
   "rightPanel.closeTab",
   "rightPanel.toggleMaximized",
+  "rightPanel.close",
   "diff.toggle",
   "preview.toggle",
   "preview.refresh",

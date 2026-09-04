@@ -25,6 +25,10 @@ export function getDesktopUpdateReleaseUrl(
   return `https://github.com/${releaseRepository}/releases/tag/v${encodeURIComponent(normalizedVersion)}`;
 }
 
+export function getDesktopUpdateReleaseHistoryUrl(): string {
+  return `https://github.com/${APP_RELEASE_REPOSITORY}/releases`;
+}
+
 export function resolveDesktopUpdateButtonAction(
   state: DesktopUpdateState,
 ): DesktopUpdateButtonAction {
@@ -127,11 +131,6 @@ export function getDesktopUpdateActionError(result: DesktopUpdateActionResult): 
 
 export function shouldToastDesktopUpdateActionResult(result: DesktopUpdateActionResult): boolean {
   return getDesktopUpdateActionError(result) !== null;
-}
-
-export function shouldHighlightDesktopUpdateError(state: DesktopUpdateState | null): boolean {
-  if (!state || state.status !== "error") return false;
-  return state.errorContext === "download" || state.errorContext === "install";
 }
 
 export function canCheckForUpdate(state: DesktopUpdateState | null): boolean {

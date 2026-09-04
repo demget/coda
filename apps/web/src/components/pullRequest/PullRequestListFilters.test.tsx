@@ -34,7 +34,8 @@ function findLabeledGroup(node: ReactNode, label: string): ReactNode {
     if (!isValidElement(child)) continue;
     const props = child.props as { readonly children?: ReactNode; readonly label?: string };
     if (props.label === label && typeof child.type === "function") {
-      return (child.type as (properties: unknown) => ReactNode)(child.props);
+      const rendered = (child.type as (properties: unknown) => ReactNode)(child.props);
+      return findLabeledGroup(rendered, label) ?? rendered;
     }
     const nested = findLabeledGroup(props.children, label);
     if (nested !== undefined) return nested;
@@ -118,7 +119,7 @@ describe("pull request filters menu", () => {
         {
           id: projectId,
           environmentId,
-          title: "T3 Code",
+          title: "Coda",
           workspaceRoot: "/work/t3code",
         },
       ],
@@ -126,7 +127,7 @@ describe("pull request filters menu", () => {
       projectEnvironmentId: environmentId,
       onProject,
     });
-    const radioGroup = findValueChange(view);
+    const radioGroup = findValueChange(findLabeledGroup(view, "Project"));
     expect(radioGroup).toBeDefined();
 
     radioGroup?.props.onValueChange(pullRequestProjectKey({ id: projectId, environmentId }));
@@ -144,19 +145,19 @@ describe("pull request filters menu", () => {
         {
           id: projectId,
           environmentId: "env-1" as EnvironmentId,
-          title: "T3 Code · one",
+          title: "Coda · one",
           workspaceRoot: "/work/t3code-1",
         },
         {
           id: projectId,
           environmentId: "env-2" as EnvironmentId,
-          title: "T3 Code · two",
+          title: "Coda · two",
           workspaceRoot: "/work/t3code-2",
         },
       ],
       onProject,
     });
-    const radioGroup = findValueChange(view);
+    const radioGroup = findValueChange(findLabeledGroup(view, "Project"));
     expect(radioGroup).toBeDefined();
 
     radioGroup?.props.onValueChange(

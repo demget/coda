@@ -1,9 +1,5 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import {
-  canSettle,
-  canSnooze,
-  reconcileSettleLifecycle,
-} from "@t3tools/client-runtime/state/thread-settled";
+import { canSnooze } from "@t3tools/client-runtime/state/thread-settled";
 import * as Cause from "effect/Cause";
 import * as Haptics from "expo-haptics";
 import { useCallback, useRef } from "react";
@@ -19,11 +15,7 @@ import {
 } from "@t3tools/client-runtime/state/thread-sort";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { environmentServerConfigsAtom } from "../../state/server";
-import {
-  environmentThreadDetails,
-  environmentThreadShells,
-  threadEnvironment,
-} from "../../state/threads";
+import { environmentThreadShells, threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 
 /** Version skew: never send settle/unsettle to a server that predates them
@@ -123,32 +115,6 @@ function useThreadActionExecutor(
           Alert.alert(
             actionFailureTitle(action),
             "This environment's server does not support settling yet. Update the server to use Settle.",
-          );
-          return false;
-        }
-        const settleValidationThread =
-          action === "settle"
-            ? reconcileSettleLifecycle(
-                thread,
-                appAtomRegistry.get(
-                  environmentThreadDetails.detailAtom({
-                    environmentId: thread.environmentId,
-                    threadId: thread.id,
-                  }),
-                ),
-              )
-            : thread;
-        // Settle may only target what effectiveSettled could classify as
-        // settled: not starting/running sessions, not threads waiting on
-        // approvals or user input. Detail and shell subscriptions advance
-        // independently, so reconcile a newer session before rejecting.
-        if (
-          action === "settle" &&
-          !canSettle(settleValidationThread, { now: new Date().toISOString() })
-        ) {
-          Alert.alert(
-            actionFailureTitle(action),
-            "This thread still needs attention. Resolve or interrupt it first, then try again.",
           );
           return false;
         }

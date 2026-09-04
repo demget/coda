@@ -2,7 +2,7 @@
 
 Coda is an "agent harness control surface". It enables control of the agents on your machine from a web, desktop, or mobile client.
 
-Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, and OpenCode. If they're set up on your computer, Coda can control them.
+Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, OpenCode, and Google Antigravity. If they're set up on your computer, Coda can control them.
 
 > [!NOTE]
 > Coda is a fork of [T3 Code](https://github.com/pingdotgg/t3code). It is not published to any
@@ -22,13 +22,14 @@ Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, and Ope
 ## Running it
 
 > [!WARNING]
-> Coda currently supports Codex, Claude, Cursor, Grok Build and OpenCode. Install and authenticate at least one provider before use:
+> Coda currently supports Codex, Claude, Cursor, Grok Build, OpenCode, and Antigravity. Install and authenticate at least one provider before use:
 >
 > - Codex: install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`
 > - Claude: install [Claude Code](https://claude.com/product/claude-code) and run `claude auth login`
 > - Cursor: install [Cursor CLI](https://cursor.com/cli) and run `agent login`
 > - Grok Build: install [Grok Build CLI](https://x.ai/cli) and run `grok login`
 > - OpenCode: install [OpenCode](https://opencode.ai) and run `opencode auth login`
+> - Antigravity: enable it in Settings, then use **Install Antigravity** and **Sign in with Google**. No CLI is required.
 
 Install the toolchain and dependencies (see [Install `vp`](#install-vp) below), then:
 

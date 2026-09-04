@@ -11,6 +11,7 @@ import {
   getThemePreferenceMode,
   isKnownThemePreference,
   getCustomThemes,
+  getStandardThemeColors,
   getStoredCustomThemeCollection,
   invalidateCustomThemes,
   installCustomTheme,
@@ -39,6 +40,7 @@ import {
   themeColorToHex,
   toCanonicalThemeColor,
   THEME_FILE_VERSION,
+  singleAppearanceOf,
 } from "./themePalette";
 
 function asHex(value: string): string {
@@ -108,7 +110,7 @@ describe("theme files", () => {
     expect(dark.secondaryLabel).toBe(dark.textMuted);
     expect(contrastRatio(light.accentForeground, light.accent)).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(dark.accentForeground, dark.accent)).toBeGreaterThanOrEqual(4.5);
-    // Status colors fall back to T3 Code's standard red and amber rather than
+    // Status colors fall back to Coda's standard red and amber rather than
     // the flagship palette's, so no generated theme inherits a brand tint.
     const channels = (value: string) =>
       [1, 3, 5].map((index) => Number.parseInt(asHex(value).slice(index, index + 2), 16)) as [
@@ -133,6 +135,19 @@ describe("theme files", () => {
     expect(asHex(dark.error)).not.toBe(asHex(darkDefaults.error));
   });
 
+  it("keeps stock dark controls in the neutral-black surface hierarchy", () => {
+    expectThemeColors(getStandardThemeColors("dark"), {
+      canvas: "#0a0a0a",
+      surface: "#111111",
+      surfaceRaised: "#111111",
+      surfaceOverlay: "#111111",
+      toolbarControl: "#111111",
+      secondary: "#111111",
+      muted: "#111111",
+      accentSurface: "#141414",
+    });
+  });
+
   it("derives readable, distinctive vivid palettes from exact seeds", () => {
     const seeds: ReadonlyArray<["light" | "dark", string, string]> = [
       ["light", "#f4f9f2", "#1d8a4e"],
@@ -155,7 +170,13 @@ describe("theme files", () => {
       expect(contrastRatio(colors.textMuted, colors.canvas)).toBeGreaterThanOrEqual(4.5);
       expect(contrastRatio(colors.textMuted, colors.canvas)).toBeLessThan(5.5);
       expect(contrastRatio(colors.mutedForeground, colors.muted)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(colors.mutedForeground, colors.muted)).toBeLessThan(
+        contrastRatio(colors.text, colors.muted),
+      );
       expect(contrastRatio(colors.placeholder, colors.surfaceRaised)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(colors.placeholder, colors.surfaceRaised)).toBeLessThan(
+        contrastRatio(colors.text, colors.surfaceRaised),
+      );
       expect(colors.secondaryLabel).toBe(colors.textMuted);
       expect(contrastRatio(colors.accentForeground, colors.accent)).toBeGreaterThanOrEqual(4.5);
       expect(
@@ -1070,5 +1091,13 @@ describe("stored theme preferences", () => {
 
     vi.unstubAllGlobals();
     invalidateCustomThemes();
+  });
+});
+
+describe("singleAppearanceOf", () => {
+  it("reports the only half a theme can claim, and null for a pair", () => {
+    const { variants: _pair, ...base } = T3_CHAT_THEME;
+    expect(singleAppearanceOf({ ...base, id: "x", appearance: "dark" })).toBe("dark");
+    expect(singleAppearanceOf(T3_CHAT_THEME)).toBe(null);
   });
 });
