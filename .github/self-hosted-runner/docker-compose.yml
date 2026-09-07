@@ -16,6 +16,7 @@ services:
       DISABLE_AUTOMATIC_DEREGISTRATION: "true"
       RUN_AS_ROOT: "true"
       GROK_HOME: /root/.grok
+      GROK_DISABLE_AUTOUPDATER: "1"
     volumes:
       - runner-config:/runner
       - runner-work:/tmp/coda-grok-runner/work

@@ -6,13 +6,19 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl git jq \
   && rm -rf /var/lib/apt/lists/*
 
-# Copy the binary into /usr/local/bin so a runtime mount of ~/.grok (auth only)
-# cannot hide the image's Grok install.
+# The installer unpacks the binary under ~/.grok and only symlinks it into
+# /usr/local/bin, so the runtime mount of ~/.grok (auth state) would hide the
+# install. Replace those symlinks with the binary itself. `grok` and `agent` are
+# one executable that dispatches on the name it was invoked under, so `agent` is
+# a hard link rather than a second 130MB copy.
 RUN curl -fsSL https://x.ai/cli/install.sh | bash \
-  && cp -L /root/.grok/bin/grok /usr/local/bin/grok \
-  && cp -L /root/.grok/bin/agent /usr/local/bin/agent \
+  && grok_bin="$(readlink -f /root/.grok/bin/grok)" \
+  && rm -f /usr/local/bin/grok /usr/local/bin/agent \
+  && cp "$grok_bin" /usr/local/bin/grok \
+  && ln /usr/local/bin/grok /usr/local/bin/agent \
   && chmod 755 /usr/local/bin/grok /usr/local/bin/agent \
-  && grok --version
+  && grok --version \
+  && agent --version
 
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
