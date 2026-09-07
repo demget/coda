@@ -34,7 +34,9 @@ jobs:
       old_main_sha: ${{ steps.resolve.outputs.old_main_sha }}
       official_tag: ${{ steps.resolve.outputs.official_tag }}
       source_sha: ${{ steps.resolve.outputs.source_sha }}
+      nightly_sha: ${{ steps.resolve.outputs.nightly_sha }}
       repository: ${{ steps.official.outputs.repository }}
+      branch: ${{ steps.official.outputs.branch }}
       version: ${{ steps.resolve.outputs.version }}
     steps:
       - name: Checkout Coda main
@@ -155,67 +157,12 @@ jobs:
           RELEASE_VERSION: ${{ steps.resolve.outputs.version }}
         run: |
           set -euo pipefail
-          git remote add official "https://github.com/$UPSTREAM_REPOSITORY.git"
-          git fetch --no-tags official \
-            "+refs/heads/$UPSTREAM_BRANCH:refs/coda/official-main" \
-            "+refs/tags/$OFFICIAL_TAG:refs/coda/official-nightly"
-
-          test "$(git rev-parse refs/coda/official-main)" = "$OFFICIAL_MAIN_SHA"
-          test "$(git rev-parse 'refs/coda/official-nightly^{commit}')" = "$OFFICIAL_NIGHTLY_SHA"
-          git merge-base --is-ancestor "$OLD_MAIN_SHA" "$OLD_HEAD"
-          git merge-base --is-ancestor "$OLD_MAIN_SHA" "$OFFICIAL_MAIN_SHA"
-          git merge-base --is-ancestor "$OFFICIAL_NIGHTLY_SHA" "$OFFICIAL_MAIN_SHA"
-
-          git diff --name-only "$OLD_MAIN_SHA" "$OFFICIAL_MAIN_SHA" > "$RUNNER_TEMP/upstream-paths.txt"
-          git diff --name-only "$OLD_MAIN_SHA" "$OLD_HEAD" > "$RUNNER_TEMP/customization-paths.txt"
-
-          candidate_dir="$RUNNER_TEMP/coda-candidate"
-          git worktree add --detach "$candidate_dir" "$OLD_HEAD"
-          git -C "$candidate_dir" config user.name "Coda upstream sync"
-          git -C "$candidate_dir" config user.email "actions@users.noreply.github.com"
-
-          if [[ "$OLD_MAIN_SHA" != "$OFFICIAL_MAIN_SHA" ]]; then
-            if ! git -C "$candidate_dir" merge --no-commit --no-ff "$OFFICIAL_MAIN_SHA" \
-              2> "$RUNNER_TEMP/merge-error.txt"; then
-              git -C "$candidate_dir" diff --name-only --diff-filter=U \
-                > "$RUNNER_TEMP/unmerged-paths.txt"
-              node scripts/downstream-sync.ts report \
-                --old-sha "$OLD_MAIN_SHA" \
-                --new-tag "$OFFICIAL_TAG" \
-                --new-sha "$OFFICIAL_MAIN_SHA" \
-                --upstream-paths "$RUNNER_TEMP/upstream-paths.txt" \
-                --customization-paths "$RUNNER_TEMP/customization-paths.txt" \
-                --unmerged-paths "$RUNNER_TEMP/unmerged-paths.txt" \
-                --rebase-error "$RUNNER_TEMP/merge-error.txt" \
-                --output "$RUNNER_TEMP/upstream-sync-conflict.md"
-              git -C "$candidate_dir" merge --abort || true
-              echo "conflicted=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
+          attempt_out="$(bash scripts/downstream-merge-candidate.sh attempt)"
+          printf '%s\n' "$attempt_out"
+          if printf '%s\n' "$attempt_out" | grep -q '^conflicted=true$'; then
+            exit 0
           fi
-
-          jq -n \
-            --arg repository "$UPSTREAM_REPOSITORY" \
-            --arg branch "$UPSTREAM_BRANCH" \
-            --arg mainSha "$OFFICIAL_MAIN_SHA" \
-            --arg nightlyTag "$OFFICIAL_TAG" \
-            --arg nightlySha "$OFFICIAL_NIGHTLY_SHA" \
-            --arg version "$RELEASE_VERSION" \
-            '{repository: $repository, branch: $branch, mainSha: $mainSha, nightlyTag: $nightlyTag, nightlySha: $nightlySha, version: $version}' \
-            > "$candidate_dir/.coda-upstream/upstream.json"
-          git -C "$candidate_dir" add .coda-upstream/upstream.json
-          if [[ "$OLD_MAIN_SHA" != "$OFFICIAL_MAIN_SHA" ]]; then
-            git -C "$candidate_dir" commit -m "chore(sync): merge upstream $OFFICIAL_TAG"
-          else
-            git -C "$candidate_dir" commit -m "chore(sync): refresh $RELEASE_VERSION"
-          fi
-
-          candidate_sha="$(git -C "$candidate_dir" rev-parse HEAD)"
-          git update-ref refs/coda/candidate "$candidate_sha"
-          git bundle create "$RUNNER_TEMP/candidate.bundle" refs/coda/candidate "^$OLD_HEAD"
-          git bundle verify "$RUNNER_TEMP/candidate.bundle"
-          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
-          echo "conflicted=false" >> "$GITHUB_OUTPUT"
+          bash scripts/downstream-merge-candidate.sh finish
 
       - name: Upload conflict report
         if: steps.merge.outputs.conflicted == 'true'
@@ -257,10 +204,136 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+  resolve:
+    name: Resolve conflicts with Grok
+    needs: prepare
+    if: needs.prepare.outputs.has_update == 'true' && needs.prepare.outputs.conflicted == 'true'
+    runs-on: [self-hosted, Linux, X64, coda-grok]
+    timeout-minutes: 60
+    outputs:
+      candidate_sha: ${{ steps.finish.outputs.candidate_sha }}
+    steps:
+      - name: Checkout Coda main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/.claude/worktrees/
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Hydrate complete Git history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --refetch --no-filter --no-tags origin \
+            '+refs/heads/*:refs/remotes/origin/*' \
+            '+refs/tags/*:refs/tags/*'
+          git rev-list --objects --all --missing=print > "$RUNNER_TEMP/reachable-objects.txt"
+          if grep -q '^?' "$RUNNER_TEMP/reachable-objects.txt"; then
+            echo "The Coda repository still has promised Git objects after a full refetch." >&2
+            exit 1
+          fi
+
+      - name: Confirm Grok subscription login
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v grok
+          grok --version
+          grok_home="${GROK_HOME:-$HOME/.grok}"
+          if [[ ! -f "$grok_home/auth.json" ]]; then
+            echo "Grok has no auth.json at $grok_home. On atlas run:" >&2
+            echo "  docker compose -f /opt/coda-grok-runner/docker-compose.yml exec runner grok login --device-auth" >&2
+            exit 1
+          fi
+
+      - id: merge
+        name: Recreate the conflicted merge
+        shell: bash
+        env:
+          KEEP_CONFLICTED: "true"
+          UPSTREAM_REPOSITORY: ${{ needs.prepare.outputs.repository }}
+          UPSTREAM_BRANCH: ${{ needs.prepare.outputs.branch }}
+          OFFICIAL_TAG: ${{ needs.prepare.outputs.official_tag }}
+          OFFICIAL_MAIN_SHA: ${{ needs.prepare.outputs.source_sha }}
+          OFFICIAL_NIGHTLY_SHA: ${{ needs.prepare.outputs.nightly_sha }}
+          OLD_MAIN_SHA: ${{ needs.prepare.outputs.old_main_sha }}
+          OLD_HEAD: ${{ needs.prepare.outputs.old_head }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: bash scripts/downstream-merge-candidate.sh attempt
+
+      - id: grok
+        name: Resolve unmerged paths with Grok
+        if: steps.merge.outputs.conflicted == 'true'
+        shell: bash
+        env:
+          CANDIDATE_DIR: ${{ steps.merge.outputs.candidate_dir }}
+        run: |
+          set -euo pipefail
+          grok --no-auto-update --always-approve --no-plan \
+            --cwd "$CANDIDATE_DIR" \
+            --prompt-file "$GITHUB_WORKSPACE/scripts/upstream-sync-resolve-prompt.md" \
+            --max-turns 40 \
+            --deny "Bash(git push*)" \
+            --deny "Bash(gh *)" \
+            -m grok-4.6 \
+            | tee "$RUNNER_TEMP/grok-resolve.log"
+          git -C "$CANDIDATE_DIR" add -u
+          if git -C "$CANDIDATE_DIR" diff --name-only --diff-filter=U | grep -q .; then
+            echo "Grok left unmerged paths:" >&2
+            git -C "$CANDIDATE_DIR" diff --name-only --diff-filter=U >&2
+            exit 1
+          fi
+
+      - name: Upload Grok log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: grok-resolve-log
+          path: ${{ runner.temp }}/grok-resolve.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - id: finish
+        name: Finish the candidate
+        shell: bash
+        env:
+          CANDIDATE_DIR: ${{ steps.merge.outputs.candidate_dir }}
+          UPSTREAM_REPOSITORY: ${{ needs.prepare.outputs.repository }}
+          UPSTREAM_BRANCH: ${{ needs.prepare.outputs.branch }}
+          OFFICIAL_TAG: ${{ needs.prepare.outputs.official_tag }}
+          OFFICIAL_MAIN_SHA: ${{ needs.prepare.outputs.source_sha }}
+          OFFICIAL_NIGHTLY_SHA: ${{ needs.prepare.outputs.nightly_sha }}
+          OLD_MAIN_SHA: ${{ needs.prepare.outputs.old_main_sha }}
+          OLD_HEAD: ${{ needs.prepare.outputs.old_head }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: bash scripts/downstream-merge-candidate.sh finish
+
+      - name: Upload candidate source
+        uses: actions/upload-artifact@v7
+        with:
+          name: downstream-candidate
+          path: ${{ runner.temp }}/candidate.bundle
+          if-no-files-found: error
+          retention-days: 3
+
   validate:
     name: Validate candidate
-    needs: prepare
-    if: needs.prepare.outputs.has_update == 'true' && needs.prepare.outputs.conflicted == 'false'
+    needs: [prepare, resolve]
+    if: >-
+      always()
+      && needs.prepare.result == 'success'
+      && needs.prepare.outputs.has_update == 'true'
+      && (needs.prepare.outputs.conflicted != 'true' || needs.resolve.result == 'success')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -283,7 +356,7 @@ jobs:
       - name: Checkout candidate source
         shell: bash
         env:
-          EXPECTED_SHA: ${{ needs.prepare.outputs.candidate_sha }}
+          EXPECTED_SHA: ${{ needs.resolve.result == 'success' && needs.resolve.outputs.candidate_sha || needs.prepare.outputs.candidate_sha }}
         run: |
           set -euo pipefail
           git fetch "$RUNNER_TEMP/candidate/candidate.bundle" refs/coda/candidate
@@ -307,7 +380,7 @@ jobs:
 
       - name: Run focused tests
         run: |
-          (cd scripts && vp test run downstream-sync.test.ts build-desktop-artifact.test.ts)
+          (cd scripts && vp test run downstream-sync.test.ts downstream-merge-candidate.test.ts build-desktop-artifact.test.ts)
           (cd apps/desktop && vp test run --passWithNoTests \
             src/app/DesktopEnvironment.test.ts \
             src/updates/DesktopUpdates.test.ts)
@@ -321,16 +394,21 @@ jobs:
           vp run --filter @t3tools/desktop typecheck
           vp run --filter @t3tools/web typecheck
 
-  propose:
-    name: Create or refresh sync PR
-    needs: [prepare, validate]
-    if: needs.prepare.outputs.has_update == 'true' && needs.prepare.outputs.conflicted == 'false' && needs.validate.result == 'success'
+  land:
+    name: Fast-forward main and propose
+    needs: [prepare, resolve, validate]
+    if: >-
+      always()
+      && needs.prepare.result == 'success'
+      && needs.validate.result == 'success'
+      && needs.prepare.outputs.has_update == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
       pull-requests: write
       issues: write
+      actions: write
     steps:
       - name: Checkout Coda main
         uses: actions/checkout@v6
@@ -338,6 +416,11 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
 
       - name: Download candidate source
         uses: actions/download-artifact@v8
@@ -348,7 +431,7 @@ jobs:
       - name: Push proposal branch
         shell: bash
         env:
-          CANDIDATE_SHA: ${{ needs.prepare.outputs.candidate_sha }}
+          CANDIDATE_SHA: ${{ needs.resolve.result == 'success' && needs.resolve.outputs.candidate_sha || needs.prepare.outputs.candidate_sha }}
         run: |
           set -euo pipefail
           branch="automation/upstream-sync"
@@ -399,7 +482,33 @@ jobs:
               --body-file "$RUNNER_TEMP/upstream-sync-pr.md"
           fi
 
+      - id: land_main
+        name: Fast-forward main
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ needs.resolve.result == 'success' && needs.resolve.outputs.candidate_sha || needs.prepare.outputs.candidate_sha }}
+          OLD_HEAD: ${{ needs.prepare.outputs.old_head }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          current="$(git rev-parse origin/main)"
+          if [[ "$current" != "$OLD_HEAD" ]]; then
+            echo "origin/main moved from $OLD_HEAD to $current; leaving the PR open." >&2
+            echo "landed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git push origin "$CANDIDATE_SHA:refs/heads/main"
+          echo "landed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch desktop release
+        if: steps.land_main.outputs.landed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run downstream-desktop-release.yml --ref main
+
       - name: Close a resolved conflict issue
+        if: steps.land_main.outputs.landed == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -408,5 +517,5 @@ jobs:
             --jq '.[] | select(.title == "[automation] Upstream sync conflict") | .number' \
             | head -n 1)"
           if [[ -n "$number" ]]; then
-            gh issue close "$number" --comment "A conflict-free upstream sync PR is now available."
+            gh issue close "$number" --comment "A conflict-free upstream sync is now on main."
           fi

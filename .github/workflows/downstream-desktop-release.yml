@@ -3,6 +3,8 @@ name: Release Coda Desktop
 on:
   schedule:
     - cron: "0 */3 * * *"
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       force:

@@ -1,0 +1,28 @@
+services:
+  runner:
+    build: .
+    image: coda-grok-github-runner:local
+    container_name: coda-grok-runner
+    restart: unless-stopped
+    environment:
+      REPO_URL: ${REPO_URL:-https://github.com/demget/coda}
+      RUNNER_NAME: ${RUNNER_NAME:-atlas-coda-grok}
+      RUNNER_SCOPE: repo
+      ACCESS_TOKEN: ${ACCESS_TOKEN}
+      LABELS: coda-grok
+      RUNNER_WORKDIR: /tmp/coda-grok-runner/work
+      CONFIGURED_ACTIONS_RUNNER_FILES_DIR: /runner
+      DISABLE_AUTO_UPDATE: "true"
+      DISABLE_AUTOMATIC_DEREGISTRATION: "true"
+      RUN_AS_ROOT: "true"
+      GROK_HOME: /root/.grok
+    volumes:
+      - runner-config:/runner
+      - runner-work:/tmp/coda-grok-runner/work
+      - grok-home:/root/.grok
+    # No docker.sock: this runner only resolves git conflicts with Grok.
+
+volumes:
+  runner-config:
+  runner-work:
+  grok-home:

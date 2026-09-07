@@ -1,29 +1,42 @@
 # Downstream Desktop Releases
 
 This fork follows `pingdotgg/t3code` while retaining Coda-specific commits on `main`. Two workflows
-share the work. `Propose Upstream Sync` watches the official repository hourly and opens a pull
-request when it has moved. `Release Coda Desktop` builds and publishes the desktop apps every three
-hours. Both can also be run manually.
+share the work. `Propose Upstream Sync` watches the official repository hourly, merges, validates,
+and fast-forwards `main`. `Release Coda Desktop` builds and publishes the desktop apps when `main`
+moves, and also on a three-hour schedule. Both can also be run manually.
 
 ## Safety model
 
 The sync workflow never rebases the live branch in place. It fetches the recorded upstream
 checkpoint, merges the Coda commit stack in an isolated worktree, and validates the candidate. It
-then pushes the result to the `automation/upstream-sync` branch and opens or refreshes a pull
-request that records the new official main, official Nightly, and downstream snapshot version in
-`.coda-upstream/upstream.json`. Nothing reaches `main` until that pull request is merged.
+then fast-forwards `main` to that merge commit and records the new official main, official Nightly,
+and downstream snapshot version in `.coda-upstream/upstream.json`. The `automation/upstream-sync`
+pull request is an audit trail; GitHub's merge button is not used, because this repository has
+merge commits disabled and a squash would drop the upstream parent.
 
-If the merge conflicts, no branch update or pull request occurs. The run uploads a collision report
-and, when repository Issues are enabled, opens or refreshes the `[automation] Upstream sync
-conflict` issue. Resolve that merge on `main`, update the recorded `mainSha` only when the Coda
-commit stack is based on that exact official commit, and rerun the workflow.
+If the merge conflicts, a self-hosted runner on atlas labeled `coda-grok` recreates the conflicted
+worktree and runs Grok against the SuperGrok login stored in that container. Grok does not commit
+or push. After it stages resolutions, the workflow finishes the merge commit, validates, and
+fast-forwards `main`. If Grok or the runner fails, the run uploads a collision report and opens or
+refreshes the `[automation] Upstream sync conflict` issue.
+
+Do not copy `~/.grok/auth.json` into GitHub secrets. Grok rotates the OIDC refresh token in place,
+and a second copy kicks the first session out. Sign in once inside the runner container with
+`grok login --device-auth`.
+
+Deploy the runner from `.github/self-hosted-runner/` to `launchpad~atlas` at `/opt/coda-grok-runner`
+with that directory's `deploy.sh`. The runner has no Docker socket and only picks up jobs labeled
+`coda-grok`. If `origin/main` moved during validate, the land step leaves the PR open and the next
+hourly run retries.
 
 ## Release cadence
 
-`Release Coda Desktop` runs on a three-hour schedule and mirrors how the official `Release`
-workflow cuts nightlies: it compares `main` to the commit behind the newest release tag and stops
-early when nothing has moved. Any commit that lands on `main` therefore ships, whether it arrived
-through an upstream sync or was written here directly.
+`Release Coda Desktop` runs when `main` is pushed, on a three-hour schedule, and by hand. It
+mirrors how the official `Release` workflow cuts nightlies: it compares `main` to the commit
+behind the newest release tag and stops early when nothing has moved. Any commit that lands on
+`main` therefore ships, whether it arrived through an upstream sync or was written here directly.
+A GITHUB_TOKEN fast-forward does not fire `on.push`, so the sync land step dispatches this
+workflow explicitly.
 
 Use **Actions → Release Coda Desktop → Run workflow** for an immediate build. The `force` input
 releases even when `main` has not moved since the last release, which is how to rebuild the same
@@ -59,14 +72,16 @@ configured; users can always download the newer DMG from GitHub Releases.
 
 ## GitHub configuration
 
-The workflow needs only the repository `GITHUB_TOKEN` with write access to repository contents and
-issues. It intentionally does not publish npm packages, deploy a relay or hosted web app, build
-mobile clients, use Blacksmith runners, or require Clerk, Vercel, EAS, Cloudflare, Apple, or Azure
-secrets.
+The GitHub-hosted jobs use the repository `GITHUB_TOKEN` with write access to contents, issues,
+pull requests, and Actions (so a successful land can dispatch the desktop release). The atlas
+runner needs a fine-grained PAT with Administration on `demget/coda` to register itself, stored
+only in `/opt/coda-grok-runner/.env` on that host. These workflows do not publish npm packages,
+deploy a relay or hosted web app, build mobile clients, use Blacksmith runners, or require Clerk,
+Vercel, EAS, Cloudflare, Apple, or Azure secrets.
 
 The root `.gitmodules` only describes gitlinks already tracked by the repository so GitHub's
 checkout action can clean up credentials. All workflow checkouts keep submodule initialization
 disabled and exclude `.repos` and local `.claude/worktrees` content.
 
 Use **Actions → Propose Upstream Sync → Run workflow** to check upstream immediately. That
-workflow's `force` option refreshes the proposal even when official upstream has not moved.
+workflow's `force` option rebuilds the candidate even when official upstream has not moved.
