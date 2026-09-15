@@ -38,7 +38,13 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: main
+          persist-credentials: false
           fetch-depth: 0
+          sparse-checkout: |
+            /*
+            !/.repos/
+            !/.claude/worktrees/
+          sparse-checkout-cone-mode: false
 
       - id: metadata
         name: Resolve release metadata
@@ -82,7 +88,7 @@ jobs:
           # break this step under `pipefail` once enough tags exist to fill the
           # pipe buffer before `head` closes it.
           last_tag="$(git for-each-ref --count=1 --sort=-creatordate \
-            --format='%(refname:short)' 'refs/tags/v*-nightly.*')"
+            --format='%(refname:short)' 'refs/tags/v*-nightly.*.coda.*')"
           if [[ -z "$last_tag" ]]; then
             echo "No previous release tag found. Proceeding."
             echo "should_release=true" >> "$GITHUB_OUTPUT"
@@ -109,6 +115,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ needs.source.outputs.sha }}
+          persist-credentials: false
           sparse-checkout: |
             /*
             !/.repos/
@@ -135,6 +142,7 @@ jobs:
           (cd scripts && vp test run downstream-sync.test.ts build-desktop-artifact.test.ts)
           (cd apps/desktop && vp test run --passWithNoTests \
             src/app/DesktopEnvironment.test.ts \
+            src/updates/updateChannels.test.ts \
             src/updates/DesktopUpdates.test.ts)
           (cd apps/web && vp test run --passWithNoTests --project unit \
             src/branding.test.ts \
@@ -146,17 +154,18 @@ jobs:
           vp run --filter @t3tools/desktop typecheck
           vp run --filter @t3tools/web typecheck
 
-  build_wsl_node_pty:
-    name: Build WSL node-pty
+  build_wsl_runtime:
+    name: Build WSL runtime
     needs: [source, validate]
     if: needs.source.outputs.should_release == 'true' && needs.validate.result == 'success'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout release source
         uses: actions/checkout@v6
         with:
           ref: ${{ needs.source.outputs.sha }}
+          persist-credentials: false
           sparse-checkout: |
             /*
             !/.repos/
@@ -171,30 +180,49 @@ jobs:
           run-install: |
             args:
               - --filter=coda...
+              - --filter=@t3tools/scripts...
 
-      - name: Build Linux x64 node-pty prebuild
-        shell: bash
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Align package versions
+        env:
+          OFFICIAL_TAG: ${{ needs.source.outputs.official_tag }}
+        run: node scripts/update-release-package-versions.ts "${OFFICIAL_TAG#v}"
+
+      - name: Build server and resource monitor
         run: |
-          set -euo pipefail
-          pty_pkg="$(node -e "console.log(require.resolve('node-pty/package.json', { paths: ['$GITHUB_WORKSPACE/apps/server'] }))")"
-          pty_dir="$(dirname "$pty_pkg")"
-          (cd "$pty_dir" && npx --yes node-gyp rebuild)
-          mkdir -p wsl-prebuild
-          cp "$pty_dir/build/Release/pty.node" wsl-prebuild/pty.node
-          file wsl-prebuild/pty.node
+          vp run --filter coda build
+          vp run build:resource-monitor
+          mkdir -p cli-resource-monitor/linux-x64
+          cp native/resource-monitor/target/release/t3-resource-monitor cli-resource-monitor/linux-x64/
 
-      - name: Upload WSL prebuild
+      - name: Build Linux single-executable
+        env:
+          VP_NODE_VERSION: "26.8.2"
+        run: node apps/server/scripts/cli.ts build-exe --verbose
+
+      - name: Package and verify WSL runtime
+        env:
+          OFFICIAL_TAG: ${{ needs.source.outputs.official_tag }}
+        run: |
+          node scripts/build-cli-archive.ts --platform linux --arch x64 \
+            --version "${OFFICIAL_TAG#v}" --resource-monitor-dir cli-resource-monitor \
+            --output-dir wsl-runtime
+          node scripts/smoke-cli-archive.ts --archive wsl-runtime/*.tar.gz --expect-version "${OFFICIAL_TAG#v}"
+
+      - name: Upload WSL runtime
         uses: actions/upload-artifact@v7
         with:
-          name: wsl-node-pty-x64
-          path: wsl-prebuild/pty.node
+          name: wsl-runtime-x64
+          path: wsl-runtime/*.tar.gz
           if-no-files-found: error
           retention-days: 3
 
   build_desktop:
     name: Build ${{ matrix.label }}
-    needs: [source, build_wsl_node_pty]
-    if: needs.source.outputs.should_release == 'true' && needs.build_wsl_node_pty.result == 'success'
+    needs: [source, build_wsl_runtime]
+    if: needs.source.outputs.should_release == 'true' && needs.build_wsl_runtime.result == 'success'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
@@ -218,6 +246,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ needs.source.outputs.sha }}
+          persist-credentials: false
           sparse-checkout: |
             /*
             !/.repos/
@@ -240,12 +269,12 @@ jobs:
         with:
           targets: ${{ matrix.rust_target }}
 
-      - name: Download WSL prebuild
+      - name: Download WSL runtime
         if: matrix.platform == 'win'
         uses: actions/download-artifact@v7
         with:
-          name: wsl-node-pty-x64
-          path: wsl-prebuild
+          name: wsl-runtime-x64
+          path: wsl-runtime
 
       - name: Install Spectre-mitigated MSVC libraries
         if: matrix.platform == 'win'
@@ -286,7 +315,7 @@ jobs:
           if [[ "${{ matrix.platform }}" == "mac" ]]; then
             args+=(--mac-updater-adhoc)
           elif [[ "${{ matrix.platform }}" == "win" ]]; then
-            args+=(--wsl-prebuild "$GITHUB_WORKSPACE/wsl-prebuild/pty.node")
+            args+=(--wsl-runtime "$GITHUB_WORKSPACE"/wsl-runtime/*.tar.gz)
           fi
           vp run dist:desktop:artifact "${args[@]}"
 

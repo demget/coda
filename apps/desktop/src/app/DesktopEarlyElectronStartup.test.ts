@@ -81,7 +81,9 @@ describe("DesktopEarlyElectronStartup", () => {
     });
 
     assert.deepEqual(options, {
-      linuxWmClass: "t3code-dev",
+      isDevelopment: true,
+      linuxWmClass: "coda-dev",
+      linuxDesktopEntryName: "com.coda.app.Development.desktop",
       passwordStore: "gnome-libsecret",
     });
   });

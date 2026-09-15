@@ -12,8 +12,8 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 export const DEFAULT_TAILSCALE_SERVE_PORT = 443;
 export const TAILSCALE_STATUS_TIMEOUT = Duration.millis(1_500);
-export const TAILSCALE_SERVE_TIMEOUT = Duration.seconds(10);
-export const TAILSCALE_PROBE_TIMEOUT = Duration.millis(2_500);
+const TAILSCALE_SERVE_TIMEOUT = Duration.seconds(10);
+const TAILSCALE_PROBE_TIMEOUT = Duration.millis(2_500);
 
 const MACOS_TAILSCALE_SHARED_DIRECTORY = "/Library/Tailscale";
 const MACOS_TAILSCALE_APP_STORE_LSOF = "/usr/sbin/lsof";
@@ -54,14 +54,14 @@ const STDERR_DIAGNOSTIC_PATTERNS: ReadonlyArray<
 ];
 
 /** Classifies stderr into a safe label, dropping the text itself. */
-export const stderrDiagnosticOf = (stderr: string): TailscaleStderrDiagnostic | undefined => {
+const stderrDiagnosticOf = (stderr: string): TailscaleStderrDiagnostic | undefined => {
   if (stderr.trim().length === 0) {
     return undefined;
   }
   return STDERR_DIAGNOSTIC_PATTERNS.find(([pattern]) => pattern.test(stderr))?.[1] ?? "unknown";
 };
 
-export class TailscaleCommandSpawnError extends Schema.TaggedErrorClass<TailscaleCommandSpawnError>()(
+export class TailscaleCommandSpawnError extends Schema.TaggedError<TailscaleCommandSpawnError>()(
   "TailscaleCommandSpawnError",
   {
     ...TailscaleCommandContext,
@@ -73,7 +73,7 @@ export class TailscaleCommandSpawnError extends Schema.TaggedErrorClass<Tailscal
   }
 }
 
-export class TailscaleCommandOutputError extends Schema.TaggedErrorClass<TailscaleCommandOutputError>()(
+class TailscaleCommandOutputError extends Schema.TaggedError<TailscaleCommandOutputError>()(
   "TailscaleCommandOutputError",
   {
     ...TailscaleCommandContext,
@@ -85,7 +85,7 @@ export class TailscaleCommandOutputError extends Schema.TaggedErrorClass<Tailsca
   }
 }
 
-export class TailscaleCommandExitError extends Schema.TaggedErrorClass<TailscaleCommandExitError>()(
+export class TailscaleCommandExitError extends Schema.TaggedError<TailscaleCommandExitError>()(
   "TailscaleCommandExitError",
   {
     ...TailscaleCommandContext,
@@ -105,7 +105,7 @@ export class TailscaleCommandExitError extends Schema.TaggedErrorClass<Tailscale
   }
 }
 
-export class TailscaleCommandTimeoutError extends Schema.TaggedErrorClass<TailscaleCommandTimeoutError>()(
+export class TailscaleCommandTimeoutError extends Schema.TaggedError<TailscaleCommandTimeoutError>()(
   "TailscaleCommandTimeoutError",
   {
     ...TailscaleCommandContext,
@@ -144,7 +144,7 @@ export const TailscaleLocalApiFailureReason = Schema.Literals([
 ]);
 export type TailscaleLocalApiFailureReason = typeof TailscaleLocalApiFailureReason.Type;
 
-export class TailscaleLocalApiError extends Schema.TaggedErrorClass<TailscaleLocalApiError>()(
+export class TailscaleLocalApiError extends Schema.TaggedError<TailscaleLocalApiError>()(
   "TailscaleLocalApiError",
   {
     operation: TailscaleLocalApiOperation,
@@ -157,7 +157,7 @@ export class TailscaleLocalApiError extends Schema.TaggedErrorClass<TailscaleLoc
   }
 }
 
-export class TailscaleStatusParseError extends Schema.TaggedErrorClass<TailscaleStatusParseError>()(
+export class TailscaleStatusParseError extends Schema.TaggedError<TailscaleStatusParseError>()(
   "TailscaleStatusParseError",
   { cause: Schema.Defect() },
 ) {
@@ -182,7 +182,6 @@ const TailscaleStatusJson = Schema.Struct({
   Self: Schema.optional(TailscaleStatusSelf),
 });
 
-export type TailscaleStatusSelf = typeof TailscaleStatusSelf.Type;
 export type TailscaleStatusJson = typeof TailscaleStatusJson.Type;
 
 export interface TailscaleStatus {

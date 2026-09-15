@@ -47,13 +47,12 @@ registry owned by this fork.
 ## Platforms and signing
 
 - macOS: Apple Silicon (`arm64`) DMG and updater ZIP.
-- Windows: x64 NSIS installer, updater metadata, and the Linux x64 `node-pty` prebuild needed by the
+- Windows: x64 NSIS installer, updater metadata, and a self-contained Linux x64 runtime for the
   packaged WSL backend.
 
-The artifacts are unsigned because this fork does not assume Apple or Microsoft signing
-credentials. macOS Gatekeeper and Windows SmartScreen can therefore warn on first launch. In
-particular, macOS in-app installation is not reliable until Apple signing and notarization are
-configured; users can always download the newer DMG from GitHub Releases.
+macOS builds use an ad-hoc signature for updater compatibility and are not Apple-notarized.
+Install the DMG manually once; subsequent nightly releases can update in-app. Windows builds are
+unsigned. Gatekeeper and SmartScreen can warn on first launch.
 
 ## GitHub configuration
 

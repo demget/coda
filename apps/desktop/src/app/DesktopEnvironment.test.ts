@@ -52,6 +52,8 @@ describe("DesktopEnvironment", () => {
           CODA_DEV_REMOTE_T3_SERVER_ENTRY_PATH: " /remote/server.mjs ",
           CODA_OTLP_TRACES_URL: " http://127.0.0.1:4318/v1/traces ",
           CODA_OTLP_EXPORT_INTERVAL_MS: "2500",
+          CODA_OTLP_HEADERS: "authorization=Basic%20abc%3D%3D,x-tenant=t3",
+          CODA_OTLP_PROTOCOL: "http/protobuf",
         },
       );
 
@@ -75,6 +77,7 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.backendCwd, "/repo");
       assert.equal(environment.appUserModelId, "com.coda.app.dev");
       assert.equal(environment.linuxWmClass, "coda-dev");
+      assert.equal(environment.linuxDesktopEntryName, "com.coda.app.Development.desktop");
       assert.equal(environment.branding.releaseRepository, "demget/coda");
       assert.deepEqual(
         Option.map(environment.devServerUrl, (url) => url.href),
@@ -85,6 +88,14 @@ describe("DesktopEnvironment", () => {
       assert.deepEqual(environment.commitHashOverride, Option.some("0123456789abcdef"));
       assert.deepEqual(environment.otlpTracesUrl, Option.some("http://127.0.0.1:4318/v1/traces"));
       assert.equal(environment.otlpExportIntervalMs, 2500);
+      assert.deepEqual(
+        environment.otlpHeaders,
+        Option.some({
+          authorization: "Basic abc==",
+          "x-tenant": "t3",
+        }),
+      );
+      assert.equal(environment.otlpProtocol, "http/protobuf");
     }),
   );
 
@@ -102,6 +113,7 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.logDir, "/tmp/t3/userdata/logs");
       assert.equal(environment.browserArtifactsDir, "/tmp/t3/userdata/browser-artifacts");
       assert.equal(environment.serverSettingsPath, "/tmp/t3/userdata/settings.json");
+      assert.equal(environment.otlpProtocol, "http/json");
     }),
   );
 
@@ -131,6 +143,23 @@ describe("DesktopEnvironment", () => {
         environment.backendEntryPath,
         "/install/resources/server.asar/apps/server/dist/bin.mjs",
       );
+      assert.equal(
+        environment.clientAssetsDir,
+        "/install/resources/server.asar/apps/server/dist/client",
+      );
+    }),
+  );
+
+  it.effect("uses the stable desktop entry as the packaged Linux portal identity", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment({
+        platform: "linux",
+        isPackaged: true,
+        appPath: "/tmp/.mount_t3code/resources/app.asar",
+        resourcesPath: "/tmp/.mount_t3code/resources",
+      });
+
+      assert.equal(environment.linuxDesktopEntryName, "com.coda.app.desktop");
     }),
   );
 
