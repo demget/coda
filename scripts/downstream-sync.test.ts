@@ -5,9 +5,6 @@ import {
   compareNightlyTags,
   createDownstreamVersion,
   decodeDownstreamState,
-  findPathCollisions,
-  renderCollisionReport,
-  renderSyncProposal,
   resolveDownstreamUpdate,
   selectLatestNightlyRelease,
 } from "./downstream-sync.ts";
@@ -111,39 +108,5 @@ describe("downstream sync", () => {
       }).has_update,
       "true",
     );
-  });
-
-  it("reports only real path overlap and unmerged files", () => {
-    NodeAssert.deepEqual(findPathCollisions(["a.ts", "b.ts"], ["b.ts", "c.ts"]), ["b.ts"]);
-    const report = renderCollisionReport({
-      oldSha: sha("a"),
-      newTag: "v1",
-      newSha: sha("b"),
-      overlappingPaths: ["b.ts"],
-      unmergedPaths: ["b.ts"],
-      rebaseError: "conflict",
-    });
-    NodeAssert.match(report, /The candidate was not built, published, or pushed/);
-    NodeAssert.match(report, /`b\.ts`/);
-  });
-
-  it("renders a deterministic PR grouped by conventional commit type", () => {
-    const report = renderSyncProposal({
-      repository: "pingdotgg/t3code",
-      oldSha: sha("a"),
-      newSha: sha("b"),
-      newTag: "v0.0.32-nightly.20260804.997",
-      workflowRunUrl: "https://github.com/demget/coda/actions/runs/42",
-      commits: [
-        { sha: sha("c"), subject: "feat(web): add useful thing" },
-        { sha: sha("d"), subject: "fix(server): repair useful thing" },
-        { sha: sha("e"), subject: "docs: explain useful thing" },
-      ],
-    });
-
-    NodeAssert.match(report, /### Features[\s\S]*feat\(web\): add useful thing/u);
-    NodeAssert.match(report, /### Fixes[\s\S]*fix\(server\): repair useful thing/u);
-    NodeAssert.match(report, /### Other changes[\s\S]*docs: explain useful thing/u);
-    NodeAssert.match(report, /no AI summary was used/u);
   });
 });

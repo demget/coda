@@ -14,22 +14,10 @@ export interface DownstreamState {
   readonly version: string | null;
 }
 
-export interface GitHubRelease {
-  readonly tag_name?: unknown;
-  readonly draft?: unknown;
-  readonly prerelease?: unknown;
-  readonly published_at?: unknown;
-}
-
 export interface NightlyRelease {
   readonly tag: string;
   readonly version: string;
   readonly publishedAt: string;
-}
-
-export interface UpstreamCommit {
-  readonly sha: string;
-  readonly subject: string;
 }
 
 const OFFICIAL_NIGHTLY_TAG = /^v(\d+\.\d+\.\d+-nightly\.\d{8}\.\d+)$/u;
@@ -134,7 +122,7 @@ export function createDownstreamVersion(input: {
     throw new Error("Upstream main distance must be a non-negative integer.");
   }
   if (!Number.isSafeInteger(input.runNumber) || input.runNumber < 1) {
-    throw new Error("GitHub Actions run number must be a positive integer.");
+    throw new Error("Sync sequence must be a positive integer.");
   }
   return `${input.releaseVersion}.coda.${input.mainDistance}.${input.runNumber}`;
 }
@@ -193,138 +181,8 @@ export function resolveDownstreamUpdate(input: {
   };
 }
 
-export function findPathCollisions(
-  upstreamPaths: ReadonlyArray<string>,
-  customizationPaths: ReadonlyArray<string>,
-): ReadonlyArray<string> {
-  const custom = new Set(customizationPaths.map((path) => path.trim()).filter(Boolean));
-  return [
-    ...new Set(upstreamPaths.map((path) => path.trim()).filter((path) => custom.has(path))),
-  ].toSorted();
-}
-
-export function renderCollisionReport(input: {
-  readonly oldSha: string;
-  readonly newTag: string;
-  readonly newSha: string;
-  readonly overlappingPaths: ReadonlyArray<string>;
-  readonly unmergedPaths: ReadonlyArray<string>;
-  readonly rebaseError: string;
-}): string {
-  const section = (title: string, paths: ReadonlyArray<string>) =>
-    paths.length === 0
-      ? `### ${title}\n\nNone.\n`
-      : `### ${title}\n\n${paths.map((path) => `- \`${path}\``).join("\n")}\n`;
-  return [
-    "# Coda upstream sync needs review",
-    "",
-    `- Previous upstream main: \`${input.oldSha}\``,
-    `- Candidate upstream: \`${input.newTag}\` / \`${input.newSha}\``,
-    "",
-    "The candidate was not built, published, or pushed.",
-    "",
-    section("Files changed by both upstream and Coda", input.overlappingPaths),
-    section("Unmerged paths reported by Git", input.unmergedPaths),
-    "### Rebase error",
-    "",
-    "```text",
-    input.rebaseError.trim() || "Git did not provide stderr.",
-    "```",
-    "",
-  ].join("\n");
-}
-
-function escapeMarkdown(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll("[", "\\[").replaceAll("]", "\\]");
-}
-
-export function renderSyncProposal(input: {
-  readonly repository: string;
-  readonly oldSha: string;
-  readonly newSha: string;
-  readonly newTag: string;
-  readonly commits: ReadonlyArray<UpstreamCommit>;
-  readonly workflowRunUrl: string;
-}): string {
-  const groups = {
-    Features: input.commits.filter(({ subject }) => /^feat(?:\([^)]*\))?!?:/u.test(subject)),
-    Fixes: input.commits.filter(({ subject }) => /^fix(?:\([^)]*\))?!?:/u.test(subject)),
-    "Other changes": input.commits.filter(
-      ({ subject }) => !/^(?:feat|fix)(?:\([^)]*\))?!?:/u.test(subject),
-    ),
-  };
-  const section = (title: string, commits: ReadonlyArray<UpstreamCommit>) => {
-    if (commits.length === 0) return `### ${title}\n\nNone.\n`;
-    return [
-      `### ${title}`,
-      "",
-      ...commits.map(({ sha, subject }) => {
-        const shortSha = sha.slice(0, 8);
-        const url = `https://github.com/${input.repository}/commit/${sha}`;
-        return `- ${escapeMarkdown(subject)} ([\`${shortSha}\`](${url}))`;
-      }),
-      "",
-    ].join("\n");
-  };
-
-  return [
-    "## Upstream sync",
-    "",
-    `Merges [${input.newTag} and upstream main changes](https://github.com/${input.repository}/compare/${input.oldSha}...${input.newSha}) into Coda.`,
-    "",
-    `- Previous upstream main: \`${input.oldSha}\``,
-    `- Candidate upstream main: \`${input.newSha}\``,
-    `- Validation run: ${input.workflowRunUrl}`,
-    "",
-    section("Features", groups.Features),
-    section("Fixes", groups.Fixes),
-    section("Other changes", groups["Other changes"]),
-    "**Merge this PR with a merge commit. Do not squash or rebase it:** the upstream parent is retained so future syncs have the correct Git merge base.",
-    "",
-    "After this PR is merged, the desktop release workflow builds updater-compatible macOS arm64 and unsigned Windows x64 downloads.",
-    "",
-    "_Generated deterministically from upstream Git history; no AI summary was used._",
-    "",
-  ].join("\n");
-}
-
 function readJson(path: string): unknown {
   return JSON.parse(NodeFS.readFileSync(path, "utf8"));
-}
-
-function readPathList(path: string | undefined): ReadonlyArray<string> {
-  if (!path || !NodeFS.existsSync(path)) return [];
-  return NodeFS.readFileSync(path, "utf8")
-    .split(/\r?\n/u)
-    .map((value) => value.trim())
-    .filter(Boolean);
-}
-
-function readCommitList(path: string): ReadonlyArray<UpstreamCommit> {
-  return NodeFS.readFileSync(path, "utf8")
-    .split(/\r?\n/u)
-    .filter(Boolean)
-    .map((line) => {
-      const separator = line.indexOf("\t");
-      if (separator < 1) throw new Error("Commit list entries must be SHA-tab-subject.");
-      const sha = line.slice(0, separator);
-      const subject = line.slice(separator + 1).trim();
-      if (!/^[0-9a-f]{40}$/u.test(sha) || !subject) {
-        throw new Error("Commit list contains an invalid entry.");
-      }
-      return { sha, subject };
-    });
-}
-
-function appendGitHubOutput(values: Readonly<Record<string, string>>): void {
-  const outputPath = process.env.GITHUB_OUTPUT;
-  if (!outputPath) throw new Error("GITHUB_OUTPUT is required when --github-output is set.");
-  NodeFS.appendFileSync(
-    outputPath,
-    Object.entries(values)
-      .map(([key, value]) => `${key}=${value}\n`)
-      .join(""),
-  );
 }
 
 function decodeMainSha(value: unknown): string {
@@ -377,67 +235,7 @@ function runResolve(values: Record<string, string | boolean | undefined>): void 
     runNumber,
     force: values.force === true,
   });
-  if (values["github-output"] === true) appendGitHubOutput(output);
-  else process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-}
-
-function runReport(values: Record<string, string | boolean | undefined>): void {
-  const outputPath = values.output;
-  if (typeof outputPath !== "string") throw new Error("report requires --output.");
-  for (const name of ["old-sha", "new-tag", "new-sha"] as const) {
-    if (typeof values[name] !== "string") throw new Error(`report requires --${name}.`);
-  }
-  const rebaseErrorPath =
-    typeof values["rebase-error"] === "string" ? values["rebase-error"] : undefined;
-  const report = renderCollisionReport({
-    oldSha: values["old-sha"] as string,
-    newTag: values["new-tag"] as string,
-    newSha: values["new-sha"] as string,
-    overlappingPaths: findPathCollisions(
-      readPathList(
-        typeof values["upstream-paths"] === "string" ? values["upstream-paths"] : undefined,
-      ),
-      readPathList(
-        typeof values["customization-paths"] === "string"
-          ? values["customization-paths"]
-          : undefined,
-      ),
-    ),
-    unmergedPaths: readPathList(
-      typeof values["unmerged-paths"] === "string" ? values["unmerged-paths"] : undefined,
-    ),
-    rebaseError:
-      rebaseErrorPath && NodeFS.existsSync(rebaseErrorPath)
-        ? NodeFS.readFileSync(rebaseErrorPath, "utf8")
-        : "",
-  });
-  NodeFS.mkdirSync(NodePath.dirname(NodePath.resolve(outputPath)), { recursive: true });
-  NodeFS.writeFileSync(outputPath, report);
-}
-
-function runProposal(values: Record<string, string | boolean | undefined>): void {
-  for (const name of [
-    "repository",
-    "old-sha",
-    "new-sha",
-    "new-tag",
-    "commits",
-    "workflow-run-url",
-    "output",
-  ] as const) {
-    if (typeof values[name] !== "string") throw new Error(`proposal requires --${name}.`);
-  }
-  const proposal = renderSyncProposal({
-    repository: values.repository as string,
-    oldSha: values["old-sha"] as string,
-    newSha: values["new-sha"] as string,
-    newTag: values["new-tag"] as string,
-    commits: readCommitList(values.commits as string),
-    workflowRunUrl: values["workflow-run-url"] as string,
-  });
-  const outputPath = values.output as string;
-  NodeFS.mkdirSync(NodePath.dirname(NodePath.resolve(outputPath)), { recursive: true });
-  NodeFS.writeFileSync(outputPath, proposal);
+  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
 }
 
 const isMain =
@@ -453,24 +251,10 @@ if (isMain) {
       compare: { type: "string" },
       "run-number": { type: "string" },
       force: { type: "boolean" },
-      "github-output": { type: "boolean" },
-      output: { type: "string" },
-      "old-sha": { type: "string" },
-      "new-sha": { type: "string" },
-      "new-tag": { type: "string" },
-      repository: { type: "string" },
-      commits: { type: "string" },
-      "workflow-run-url": { type: "string" },
-      "upstream-paths": { type: "string" },
-      "customization-paths": { type: "string" },
-      "unmerged-paths": { type: "string" },
-      "rebase-error": { type: "string" },
     },
     strict: true,
   });
   if (command === "latest") runLatest(values);
   else if (command === "resolve") runResolve(values);
-  else if (command === "report") runReport(values);
-  else if (command === "proposal") runProposal(values);
-  else throw new Error("Expected command 'latest', 'resolve', 'report', or 'proposal'.");
+  else throw new Error("Expected command 'latest' or 'resolve'.");
 }

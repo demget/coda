@@ -1,0 +1,6 @@
+interface:
+  display_name: "Sync upstream"
+  short_description: "Manually sync and verify Coda against upstream"
+  default_prompt: "Use $sync-upstream to update Coda from upstream and verify the build."
+policy:
+  allow_implicit_invocation: false
