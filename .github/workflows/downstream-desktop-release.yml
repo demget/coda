@@ -34,17 +34,19 @@ jobs:
       tag: ${{ steps.metadata.outputs.tag }}
       version: ${{ steps.metadata.outputs.version }}
     steps:
+      # Direct Git checkout avoids credential cleanup traversing vendored gitlinks.
       - name: Checkout Coda main
-        uses: actions/checkout@v6
-        with:
-          ref: main
-          persist-credentials: false
-          fetch-depth: 0
-          sparse-checkout: |
-            /*
-            !/.repos/
-            !/.claude/worktrees/
-          sparse-checkout-cone-mode: false
+        shell: bash
+        env:
+          CHECKOUT_REF: ${{ github.sha }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --filter=blob:none origin "$CHECKOUT_REF" '+refs/tags/*:refs/tags/*'
+          git sparse-checkout set --no-cone '/*' '!/.repos/' '!/.claude/worktrees/'
+          git checkout --detach "$CHECKOUT_REF"
 
       - id: metadata
         name: Resolve release metadata
@@ -112,15 +114,17 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout release source
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.source.outputs.sha }}
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-            !/.claude/worktrees/
-          sparse-checkout-cone-mode: false
+        shell: bash
+        env:
+          CHECKOUT_REF: ${{ needs.source.outputs.sha }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
+          git sparse-checkout set --no-cone '/*' '!/.repos/' '!/.claude/worktrees/'
+          git checkout --detach "$CHECKOUT_REF"
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
@@ -162,15 +166,17 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout release source
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.source.outputs.sha }}
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-            !/.claude/worktrees/
-          sparse-checkout-cone-mode: false
+        shell: bash
+        env:
+          CHECKOUT_REF: ${{ needs.source.outputs.sha }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
+          git sparse-checkout set --no-cone '/*' '!/.repos/' '!/.claude/worktrees/'
+          git checkout --detach "$CHECKOUT_REF"
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
@@ -243,15 +249,17 @@ jobs:
             rust_target: x86_64-pc-windows-msvc
     steps:
       - name: Checkout release source
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.source.outputs.sha }}
-          persist-credentials: false
-          sparse-checkout: |
-            /*
-            !/.repos/
-            !/.claude/worktrees/
-          sparse-checkout-cone-mode: false
+        shell: bash
+        env:
+          CHECKOUT_REF: ${{ needs.source.outputs.sha }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
+          git sparse-checkout set --no-cone '/*' '!/.repos/' '!/.claude/worktrees/'
+          git checkout --detach "$CHECKOUT_REF"
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
