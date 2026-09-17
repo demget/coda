@@ -53,7 +53,7 @@ or use a package manager:
 ### Windows Subsystem for Linux
 
 Choose a WSL distro in **Settings → Connections** to run agents and projects
-there. Install Node.js and provider CLIs inside that distro. Coda installs its
+there. Install provider CLIs inside that distro. Coda installs its
 matching server runtime there automatically; the first launch after an app
 update can take longer.
 

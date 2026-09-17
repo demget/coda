@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { ProviderInstanceId, type ModelCapabilities } from "@t3tools/contracts";
+import { ProviderDriverKind, ProviderInstanceId, type ModelCapabilities } from "@t3tools/contracts";
 
 import {
   applyClaudePromptEffortPrefix,
@@ -10,6 +10,8 @@ import {
   getModelSelectionBooleanOptionValue,
   getModelSelectionStringOptionValue,
   getProviderOptionDescriptors,
+  normalizeModelSlug,
+  normalizeCustomModelSlug,
   readCustomModelEntries,
   toCustomModelSetting,
   getProviderOptionBooleanSelectionValue,
@@ -167,10 +169,10 @@ describe("descriptor helpers", () => {
 
 describe("model slug normalization", () => {
   it("preserves exact custom slugs instead of expanding provider aliases", () => {
-    const claude = ProviderDriverKind.make("claudeAgent");
+    const kimi = ProviderDriverKind.make("kimi");
 
-    expect(normalizeModelSlug("opus", claude)).toBe("claude-opus-5");
-    expect(normalizeCustomModelSlug(" opus ")).toBe("opus");
+    expect(normalizeModelSlug("k3", kimi)).toBe("kimi-code/k3");
+    expect(normalizeCustomModelSlug(" k3 ")).toBe("k3");
   });
 
   it("expands Kimi's user-facing model aliases", () => {

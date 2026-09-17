@@ -146,7 +146,13 @@ export const make = Effect.gen(function* () {
       label: "Close Window",
       accelerator: "Shift+CmdOrCtrl+W",
     } satisfies Electron.MenuItemConstructorOptions;
-    const pasteAsTextClick = () => {
+    // Chromium handles the accelerator; only menu clicks need an injected paste.
+    const pasteAsTextClick = (
+      _item: Electron.MenuItem,
+      _window: Electron.BaseWindow | undefined,
+      event: Electron.KeyboardEvent,
+    ) => {
+      if (event.triggeredByAccelerator === true) return;
       runMenuEffect("paste-as-text", dispatchMenuAction("paste-as-text"));
     };
     const zoomClick = (direction: DesktopWindow.MainWindowZoomDirection) => () => {
