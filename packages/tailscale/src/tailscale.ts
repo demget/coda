@@ -118,13 +118,11 @@ export class TailscaleCommandTimeoutError extends Schema.TaggedError<TailscaleCo
   }
 }
 
-export const TailscaleCommandError = Schema.Union([
-  TailscaleCommandSpawnError,
-  TailscaleCommandOutputError,
-  TailscaleCommandExitError,
-  TailscaleCommandTimeoutError,
-]);
-export type TailscaleCommandError = typeof TailscaleCommandError.Type;
+export type TailscaleCommandError =
+  | TailscaleCommandSpawnError
+  | TailscaleCommandOutputError
+  | TailscaleCommandExitError
+  | TailscaleCommandTimeoutError;
 
 export const TailscaleLocalApiOperation = Schema.Literals([
   "discover",
@@ -166,12 +164,10 @@ export class TailscaleStatusParseError extends Schema.TaggedError<TailscaleStatu
   }
 }
 
-export const TailscaleError = Schema.Union([
-  TailscaleCommandError,
-  TailscaleLocalApiError,
-  TailscaleStatusParseError,
-]);
-export type TailscaleError = typeof TailscaleError.Type;
+export type TailscaleError =
+  | TailscaleCommandError
+  | TailscaleLocalApiError
+  | TailscaleStatusParseError;
 
 const TailscaleStatusSelf = Schema.Struct({
   DNSName: Schema.optional(Schema.Unknown),

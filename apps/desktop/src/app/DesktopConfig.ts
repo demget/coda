@@ -9,10 +9,10 @@ const trimNonEmptyOption = (value: string): Option.Option<string> => {
 };
 
 const trimmedString = (name: string) =>
-  Config.string(name).pipe(Config.option, Config.map(Option.flatMap(trimNonEmptyOption)));
+  Config.String(name).pipe(Config.option, Config.map(Option.flatMap(trimNonEmptyOption)));
 
 const optionalBoolean = (name: string) =>
-  Config.boolean(name).pipe(Config.option, Config.map(Option.getOrElse(() => false)));
+  Config.Boolean(name).pipe(Config.option, Config.map(Option.getOrElse(() => false)));
 
 const commaSeparatedStrings = (name: string) =>
   trimmedString(name).pipe(
@@ -38,27 +38,27 @@ export const DesktopConfig = Config.all({
   xdgConfigHome: trimmedString("XDG_CONFIG_HOME"),
   xdgDataHome: trimmedString("XDG_DATA_HOME"),
   t3Home: trimmedString("CODA_HOME"),
-  devServerUrl: Config.url("VITE_DEV_SERVER_URL").pipe(Config.option),
+  devServerUrl: Config.URL("VITE_DEV_SERVER_URL").pipe(Config.option),
   appUserModelIdOverride: trimmedString("CODA_DESKTOP_APP_USER_MODEL_ID"),
   devRemoteT3ServerEntryPath: trimmedString("CODA_DEV_REMOTE_T3_SERVER_ENTRY_PATH"),
-  configuredBackendPort: Config.port("CODA_PORT").pipe(Config.option),
+  configuredBackendPort: Config.Port("CODA_PORT").pipe(Config.option),
   commitHashOverride: trimmedString("CODA_COMMIT_HASH"),
   desktopLanHostOverride: trimmedString("CODA_DESKTOP_LAN_HOST"),
   desktopHttpsEndpointUrls: commaSeparatedStrings("CODA_DESKTOP_HTTPS_ENDPOINTS"),
   otlpTracesUrl: trimmedString("CODA_OTLP_TRACES_URL"),
-  otlpExportIntervalMs: Config.int("CODA_OTLP_EXPORT_INTERVAL_MS").pipe(Config.withDefault(10_000)),
+  otlpMetricsUrl: trimmedString("CODA_OTLP_METRICS_URL"),
+  otlpLogsUrl: trimmedString("CODA_OTLP_LOGS_URL"),
+  otlpExportIntervalMs: Config.Int("CODA_OTLP_EXPORT_INTERVAL_MS").pipe(Config.withDefault(10_000)),
   otlpHeaders: Config.schema(OtlpHeadersFromString, "CODA_OTLP_HEADERS").pipe(Config.option),
   otlpProtocol: Config.schema(OtlpProtocol, "CODA_OTLP_PROTOCOL").pipe(
     Config.withDefault("http/json"),
   ),
   appImagePath: trimmedString("APPIMAGE"),
   disableAutoUpdate: optionalBoolean("CODA_DISABLE_AUTO_UPDATE"),
-  // Opt-in rather than automatic: a dev build is the daily driver when working
-  // on Coda from inside Coda, and a detached inspector on every launch is noise
-  // there. `CODA_DESKTOP_DEVTOOLS=1` brings the old behaviour back.
+  // Development builds open DevTools only when explicitly requested.
   openDevToolsOnStartup: optionalBoolean("CODA_DESKTOP_DEVTOOLS"),
   mockUpdates: optionalBoolean("CODA_DESKTOP_MOCK_UPDATES"),
-  mockUpdateServerPort: Config.port("CODA_DESKTOP_MOCK_UPDATE_SERVER_PORT").pipe(
+  mockUpdateServerPort: Config.Port("CODA_DESKTOP_MOCK_UPDATE_SERVER_PORT").pipe(
     Config.withDefault(3000),
   ),
 });
