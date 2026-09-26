@@ -552,8 +552,33 @@ OTLP export:
   `OTEL_EXPORTER_OTLP_HEADERS`: comma-separated `key=value` pairs with percent-encoded values.
 - `CODA_OTLP_PROTOCOL`: `http/json` (default) or `http/protobuf`
 
+The server and the desktop app also read the standard
+`OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT` and generic `OTEL_EXPORTER_OTLP_ENDPOINT` (with
+`/v1/traces`, `/v1/metrics`, or `/v1/logs` appended), for a collector expecting those instead. A
+non-blank `CODA_OTLP_*_URL` wins over either, and a per-signal endpoint wins over the generic one
+for its signal. A blank value counts as unset. A signal with an OTEL endpoint takes its headers from
+`OTEL_EXPORTER_OTLP_HEADERS` and its protocol from `OTEL_EXPORTER_OTLP_PROTOCOL` (default
+`http/protobuf`, read case-insensitively), and a per-signal
+`OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_HEADERS` or `_PROTOCOL` wins over the generic one for its
+signal. `CODA_OTLP_HEADERS` and `CODA_OTLP_PROTOCOL` never apply to it. An endpoint that is not
+an `http` or `https` URL, a protocol other than `http/protobuf` or `http/json` such as `grpc`, or
+headers that are not `key=value` pairs with percent-encoded values turn that signal's export off
+with a startup warning, rather than sending it to the Settings endpoint.
+
 If the OTLP URLs are unset, local tracing still works, metrics stay in-process only, and logs stay
 on stdout only.
+
+### The Kill Switch
+
+`CODA_OTEL_SDK_DISABLED` and `OTEL_SDK_DISABLED` turn off every OTLP export in both the server and
+the desktop main process, overriding any endpoint from the environment or Settings. Local trace
+files and stdout logs are unaffected.
+
+`CODA_OTEL_SDK_DISABLED` wins when set, so `CODA_OTEL_SDK_DISABLED=false` re-enables export on a
+machine that sets `OTEL_SDK_DISABLED` for everything else. It accepts the usual boolean spellings
+(`true`/`false`, `yes`/`no`, `on`/`off`, `1`/`0`, `y`/`n`). `OTEL_SDK_DISABLED` follows the
+OpenTelemetry specification and only `true` disables export, so `OTEL_SDK_DISABLED=1` does not.
+Values are case-insensitive and trimmed. An unrecognized value is ignored with a startup warning.
 
 ### What Is Instrumented Today
 
