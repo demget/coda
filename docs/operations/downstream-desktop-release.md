@@ -60,5 +60,5 @@ The desktop release workflow uses the repository `GITHUB_TOKEN`, with contents w
 in its publish job. It does not publish npm packages, deploy a relay or hosted web app, or build
 mobile clients. It does not require provider credentials or a self-hosted runner.
 
-Workflow checkouts exclude `.repos` and local `.claude/worktrees` content and leave submodule
-initialization disabled. Those directories are not release inputs.
+Workflow checkouts exclude `.repos` and leave submodule initialization disabled. That directory is
+not a release input.

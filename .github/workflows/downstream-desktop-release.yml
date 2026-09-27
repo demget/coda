@@ -45,7 +45,7 @@ jobs:
           git init .
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           git fetch --no-tags --filter=blob:none origin "$CHECKOUT_REF" '+refs/tags/*:refs/tags/*'
-          git sparse-checkout set --no-cone '/*' '!/.repos/' '!/.claude/worktrees/'
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
           git checkout --detach "$CHECKOUT_REF"
 
       - id: metadata
@@ -123,7 +123,7 @@ jobs:
           git init .
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
-          git sparse-checkout set --no-cone '/*' '!/.repos/' '!/.claude/worktrees/'
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
           git checkout --detach "$CHECKOUT_REF"
 
       - name: Setup Vite+
@@ -175,7 +175,7 @@ jobs:
           git init .
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
-          git sparse-checkout set --no-cone '/*' '!/.repos/' '!/.claude/worktrees/'
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
           git checkout --detach "$CHECKOUT_REF"
 
       - name: Setup Vite+
@@ -258,7 +258,7 @@ jobs:
           git init .
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
-          git sparse-checkout set --no-cone '/*' '!/.repos/' '!/.claude/worktrees/'
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
           git checkout --detach "$CHECKOUT_REF"
 
       - name: Setup Vite+
