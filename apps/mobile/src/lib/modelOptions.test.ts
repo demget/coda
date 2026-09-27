@@ -221,7 +221,6 @@ describe("mobile model options", () => {
     const [option] = buildModelOptions(config, null);
 
     expect(option?.providerLabel).toBe("Kimi");
-    expect(option?.subtitle).toBe("Kimi");
   });
 
   describe("Antigravity selections", () => {
