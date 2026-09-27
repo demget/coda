@@ -20,6 +20,8 @@ Main stays linear. Apply the change from the recorded `mainSha` to the pinned of
 
 Inspect both sides of every conflict. Carry Coda customizations forward into upstream's current structure: branding/assets and `.coda` state paths, Kimi support, voice input, file-path highlighting, macOS updater signing/recovery, and the downstream release workflow. Keep upstream package scopes and third-party names intact. Preserve official URLs that serve official services; the desktop updater repository must remain `demget/coda`. Follow moved functionality instead of resurrecting deleted upstream modules. Do not bulk choose ours/theirs or replace names across the repository.
 
+The fork keeps only `.github/workflows/ci.yml` and `.github/workflows/downstream-desktop-release.yml`. Upstream's other workflows need its runners, secrets, and services, so resolve modify/delete conflicts on them as deletions, and delete workflows the sync adds, along with any `.github/scripts` files and `ci.yml` steps that only serve them.
+
 Write the resolved checkpoint to `.coda-upstream/upstream.json` only with the source changes it describes. Stage specific resolved paths. Check for unmerged entries and conflict markers. Review the resulting diff against both Coda HEAD and pinned upstream; successful textual resolution alone is insufficient. Leave product decisions that cannot be inferred from the fork for the maintainer.
 
 ## Verify and finish
