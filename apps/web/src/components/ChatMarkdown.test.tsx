@@ -34,6 +34,13 @@ vi.mock("./ui/tooltip", async () => {
     TooltipPopup: () => null,
   };
 });
+// Static renders never run the existence probe, so paths default to confirmed.
+const filePathStatus = vi.hoisted(() => ({
+  current: (_path: string): "exists" | "missing" => "exists",
+}));
+vi.mock("../hooks/useFilePathExistence", () => ({
+  useFilePathExistence: () => (path: string) => filePathStatus.current(path),
+}));
 vi.mock("../state/use-atom-query-runner", () => ({ useAtomQueryRunner: () => vi.fn() }));
 vi.mock("../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
 vi.mock("../state/session", async (importOriginal) => ({
@@ -845,6 +852,25 @@ describe("ChatMarkdown Windows file links", () => {
 
     expect(html).toContain('href="C:/Users/shawn/project/src/main.ts"');
     expect(html).toContain("chat-markdown-file-link");
+  });
+
+  it("keeps paths the environment reports missing as plain text", () => {
+    filePathStatus.current = () => "missing";
+    try {
+      const html = renderToStaticMarkup(
+        <ChatMarkdown
+          cwd="C:/Users/shawn/project"
+          environmentId={environmentId}
+          text="[Open](C:/Users/shawn/project/src/main.ts) and `deepseek/deepseek-v3.2`"
+        />,
+      );
+
+      expect(html).not.toContain("chat-markdown-file-link");
+      expect(html).not.toContain('href="C:/Users/shawn/project/src/main.ts"');
+      expect(html).toContain("Open");
+    } finally {
+      filePathStatus.current = () => "exists";
+    }
   });
 
   it.each([true, false])("normalizes backslashes with parseRawHtml=%s", (parseRawHtml) => {
