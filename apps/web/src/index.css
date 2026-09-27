@@ -175,6 +175,16 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   /* Motion. drawer is the decelerating curve for surfaces that slide or pop in
      (composer context, pills). */
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  /* emphasized is the snappy standard curve for controls that change shape in
+     place (the voice input button). */
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  /* The voice input button's recording state and its top-edge highlights. */
+  --color-voice-recording: var(--voice-recording);
+  --color-voice-recording-hover: var(--voice-recording-hover);
+  --color-voice-recording-foreground: var(--voice-recording-foreground);
+  --color-voice-recording-foreground-hover: var(--voice-recording-foreground-hover);
+  --inset-shadow-voice-recording: inset 0 1px var(--voice-recording-highlight);
+  --inset-shadow-voice-active: inset 0 1px var(--voice-active-highlight);
   /* The composer's elevation: a soft drop pulled in under the surface, shared
      by the composer, its context strip and attached banners. */
   --shadow-composer: 0 12px 28px -18px rgb(0 0 0 / 40%);
@@ -1093,6 +1103,12 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --terminal-foreground: var(--foreground);
   --terminal-cursor: rgb(38 56 78);
   --terminal-selection-background: rgb(37 63 99 / 20%);
+  --voice-recording: oklch(0.94 0.028 28);
+  --voice-recording-hover: oklch(0.92 0.038 28);
+  --voice-recording-foreground: oklch(0.46 0.145 28);
+  --voice-recording-foreground-hover: oklch(0.42 0.145 28);
+  --voice-recording-highlight: --alpha(var(--color-white) / 38%);
+  --voice-active-highlight: --alpha(var(--color-white) / 28%);
 
   @variant dark {
     color-scheme: dark;
@@ -1132,6 +1148,12 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     --sidebar-stage-fade: var(--card);
     --terminal-cursor: rgb(180 203 255);
     --terminal-selection-background: rgb(180 203 255 / 25%);
+    --voice-recording: oklch(0.32 0.052 28);
+    --voice-recording-hover: oklch(0.35 0.06 28);
+    --voice-recording-foreground: oklch(0.82 0.095 28);
+    --voice-recording-foreground-hover: oklch(0.86 0.095 28);
+    --voice-recording-highlight: --alpha(var(--color-white) / 10%);
+    --voice-active-highlight: --alpha(var(--color-white) / 8%);
   }
 }
 

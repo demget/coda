@@ -46,6 +46,6 @@ describe("VoiceTranscriptionControlContent", () => {
     expect(markup).toContain("data-voice-signal-mark");
     expect(markup).toContain(">Transcribing</span>");
     expect(markup).toContain("data-voice-stop-mark");
-    expect(markup).toContain("scale-[0.25] opacity-0 blur-[4px]");
+    expect(markup).toContain("scale-[0.25] opacity-0 blur-xs");
   });
 });

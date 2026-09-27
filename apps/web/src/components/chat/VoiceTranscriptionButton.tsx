@@ -133,16 +133,16 @@ export function VoiceTranscriptionControlContent(props: VoiceTranscriptionContro
       <span className="relative flex size-4 shrink-0 items-center justify-center">
         <span
           className={cn(
-            "absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
-            isActive ? "scale-[0.25] opacity-0 blur-[4px]" : "scale-100 opacity-100 blur-0",
+            "absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 ease-emphasized motion-reduce:transition-none",
+            isActive ? "scale-[0.25] opacity-0 blur-xs" : "scale-100 opacity-100 blur-none",
           )}
         >
           <ComposerControlIcon icon={MicIcon} />
         </span>
         <span
           className={cn(
-            "absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
-            isActive ? "scale-100 opacity-100 blur-0" : "scale-[0.25] opacity-0 blur-[4px]",
+            "absolute inset-0 flex items-center justify-center transition-[opacity,filter,scale] duration-300 ease-emphasized motion-reduce:transition-none",
+            isActive ? "scale-100 opacity-100 blur-none" : "scale-[0.25] opacity-0 blur-xs",
           )}
         >
           <VoiceSignalMark phase={phase} />
@@ -161,10 +161,10 @@ export function VoiceTranscriptionControlContent(props: VoiceTranscriptionContro
           </span>
           <span
             className={cn(
-              "flex size-3.5 shrink-0 items-center justify-center transition-[opacity,filter,scale] duration-300 [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+              "flex size-3.5 shrink-0 items-center justify-center transition-[opacity,filter,scale] duration-300 ease-emphasized motion-reduce:transition-none",
               phase === "recording"
-                ? "scale-100 opacity-100 blur-0"
-                : "scale-[0.25] opacity-0 blur-[4px]",
+                ? "scale-100 opacity-100 blur-none"
+                : "scale-[0.25] opacity-0 blur-xs",
             )}
           >
             <VoiceStopMark />
@@ -400,12 +400,12 @@ export function VoiceTranscriptionButton(props: VoiceTranscriptionButtonProps) {
               aria-pressed={isRecording}
               className={cn(
                 "h-8 min-h-8 shrink-0 px-0 after:absolute after:left-1/2 after:top-1/2 after:min-h-10 after:min-w-10 after:-translate-x-1/2 after:-translate-y-1/2 active:not-disabled:scale-[0.96] motion-reduce:transition-none pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11",
-                "transition-[width,background-color,color,box-shadow,scale] duration-200 [transition-timing-function:cubic-bezier(0.2,0,0,1)]",
+                "transition-[width,background-color,color,box-shadow,scale] duration-200 ease-emphasized",
                 isActive ? "w-[8.25rem]" : "w-9",
                 isRecording
-                  ? "bg-[oklch(0.94_0.028_28)] text-[oklch(0.46_0.145_28)] inset-shadow-[0_1px_--theme(--color-white/38%)] hover:bg-[oklch(0.92_0.038_28)] hover:text-[oklch(0.42_0.145_28)] dark:bg-[oklch(0.32_0.052_28)] dark:text-[oklch(0.82_0.095_28)] dark:inset-shadow-[0_1px_--theme(--color-white/10%)] dark:hover:bg-[oklch(0.35_0.06_28)] dark:hover:text-[oklch(0.86_0.095_28)]"
+                  ? "bg-voice-recording text-voice-recording-foreground inset-shadow-voice-recording hover:bg-voice-recording-hover hover:text-voice-recording-foreground-hover"
                   : isActive
-                    ? "bg-foreground/[0.055] text-foreground/72 inset-shadow-[0_1px_--theme(--color-white/28%)] disabled:opacity-100 dark:inset-shadow-[0_1px_--theme(--color-white/8%)]"
+                    ? "bg-foreground/[0.055] text-foreground/72 inset-shadow-voice-active disabled:opacity-100"
                     : "text-muted-foreground/70 hover:text-foreground/80",
                 isBusy && "cursor-wait",
                 isActive ? "[&>span]:gap-1.5 [&>span]:px-2" : "[&>span]:px-0",
