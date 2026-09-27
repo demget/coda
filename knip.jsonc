@@ -46,8 +46,9 @@
         "src/preview/Annotation.css!",
       ],
       // The injected runtime resolves Playwright by string; release tooling runs
-      // electron-builder from this workspace, outside its package scripts.
-      "ignoreDependencies": ["playwright-core", "electron-builder"],
+      // electron-builder from this workspace, outside its package scripts; the
+      // conditional dev task in vite.config.ts runs cross-env.
+      "ignoreDependencies": ["playwright-core", "electron-builder", "cross-env"],
     },
     "apps/web": {
       // Worktree setup (scripts/setup-worktree.ts) runs this directly.

@@ -1,6 +1,6 @@
 import { tokenizeCliArgs } from "@t3tools/shared/cliArgs";
 
-export const CODA_CODEX_LAUNCH_ARGS_ENV = "CODA_CODEX_LAUNCH_ARGS";
+const CODA_CODEX_LAUNCH_ARGS_ENV = "CODA_CODEX_LAUNCH_ARGS";
 
 export const resolveCodexLaunchArgs = (
   launchArgs?: string,

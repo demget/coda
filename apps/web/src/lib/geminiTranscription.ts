@@ -22,7 +22,7 @@ export type VoiceTranscriptionErrorCode =
   | "response-invalid"
   | "service-error";
 
-export class VoiceTranscriptionError extends Error {
+class VoiceTranscriptionError extends Error {
   readonly code: VoiceTranscriptionErrorCode;
 
   constructor(code: VoiceTranscriptionErrorCode, message: string, options?: ErrorOptions) {
@@ -102,7 +102,7 @@ export function encodeAudioBufferAsMonoWav(audio: AudioBufferSource): ArrayBuffe
   return wav;
 }
 
-export async function convertRecordedAudioToWav(recording: Blob): Promise<Blob> {
+async function convertRecordedAudioToWav(recording: Blob): Promise<Blob> {
   if (recording.size === 0) {
     throw new VoiceTranscriptionError("audio-empty", "The recording did not contain audio.");
   }

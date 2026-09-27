@@ -34,7 +34,7 @@ const KIMI_DRIVER_KIND = ProviderDriverKind.make("kimi");
  * Fallback model id. Kimi reports fully-qualified `<provider>/<model>` ids,
  * and K3 is the default `kimi-code` alias ships with.
  */
-export const KIMI_DEFAULT_MODEL_ID = "kimi-code/k3";
+const KIMI_DEFAULT_MODEL_ID = "kimi-code/k3";
 
 /**
  * The single auth method Kimi advertises. It is a `terminal`-type method, so

@@ -942,13 +942,13 @@ const WsProjectsSearchContentsRpc = Rpc.make(WS_METHODS.projectsSearchContents, 
 
 // Existence probing never fails as a whole: an unreadable or missing path is
 // reported as such per entry, so clients get one answer per candidate.
-export const WsProjectsCheckPathsRpc = Rpc.make(WS_METHODS.projectsCheckPaths, {
+const WsProjectsCheckPathsRpc = Rpc.make(WS_METHODS.projectsCheckPaths, {
   payload: ProjectCheckPathsInput,
   success: ProjectCheckPathsResult,
   error: EnvironmentAuthorizationError,
 });
 
-export const WsProjectsListEntriesRpc = Rpc.make(WS_METHODS.projectsListEntries, {
+const WsProjectsListEntriesRpc = Rpc.make(WS_METHODS.projectsListEntries, {
   payload: ProjectListEntriesInput,
   success: ProjectListEntriesResult,
   error: Schema.Union([ProjectListEntriesError, EnvironmentAuthorizationError]),

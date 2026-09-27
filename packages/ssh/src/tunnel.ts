@@ -723,7 +723,7 @@ fi
 printf '{"remotePort":%s,"serverKind":"%s"}\\n' "$REMOTE_PORT" "\${REMOTE_MANAGED:-managed}"
 `;
 
-export const REMOTE_PAIRING_SCRIPT = `set -eu
+const REMOTE_PAIRING_SCRIPT = `set -eu
 STATE_DIR="$HOME/.coda/ssh-launch/@@T3_STATE_KEY@@"
 DEFAULT_SERVER_HOME="$HOME/.coda"
 RUNNER_FILE="$STATE_DIR/run-t3.sh"
@@ -736,7 +736,7 @@ PAIRING_BASE_DIR="$DEFAULT_SERVER_HOME"
 "$RUNNER_FILE" auth pairing create --base-dir "$PAIRING_BASE_DIR" --json
 `;
 
-export const REMOTE_STOP_SCRIPT = `set -eu
+const REMOTE_STOP_SCRIPT = `set -eu
 STATE_DIR="$HOME/.coda/ssh-launch/@@T3_STATE_KEY@@"
 PID_FILE="$STATE_DIR/pid"
 PORT_FILE="$STATE_DIR/port"

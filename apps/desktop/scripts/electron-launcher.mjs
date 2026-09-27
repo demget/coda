@@ -15,8 +15,8 @@ const repoRoot = NodePath.resolve(desktopDir, "..", "..");
 const devBundleIdSuffix = NodePath.basename(repoRoot)
   .toLowerCase()
   .replaceAll(/[^a-z0-9]+/g, "");
-export const APP_DISPLAY_NAME = isDevelopment ? "Coda (Dev)" : "Coda (Alpha)";
-export const APP_BUNDLE_ID = isDevelopment
+const APP_DISPLAY_NAME = isDevelopment ? "Coda (Dev)" : "Coda (Alpha)";
+const APP_BUNDLE_ID = isDevelopment
   ? `com.coda.app.dev.${devBundleIdSuffix || "local"}`
   : "com.coda.app";
 const APP_PROTOCOL_SCHEMES = isDevelopment ? ["coda-dev"] : ["coda"];
