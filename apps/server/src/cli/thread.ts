@@ -6,6 +6,7 @@
  * orchestration scopes and is revoked on exit. There is no offline mode: a
  * turn needs the running server's provider sessions.
  */
+import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
@@ -19,6 +20,7 @@ import {
   type OrchestrationLatestTurnState,
   type OrchestrationMessage,
   OrchestrationMessageRole,
+  ORCHESTRATION_WS_METHODS,
   type OrchestrationProjectShell,
   OrchestrationSessionStatus,
   type OrchestrationThreadShell,
@@ -26,7 +28,9 @@ import {
   type ServerProviderModel,
   ServerSettings,
   ThreadId,
+  WsRpcGroup,
 } from "@t3tools/contracts";
+import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
@@ -48,6 +52,9 @@ import * as Stream from "effect/Stream";
 import { Argument, Command, Flag, GlobalFlag } from "effect/unstable/cli";
 import { FetchHttpClient } from "effect/unstable/http";
 import * as HttpApiClient from "effect/unstable/httpapi/HttpApiClient";
+import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import * as Socket from "effect/unstable/socket/Socket";
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
@@ -140,6 +147,24 @@ export class ThreadTurnEndedError extends Schema.TaggedError<ThreadTurnEndedErro
       case "error":
         return this.detail === null ? "The turn failed." : `The turn failed: ${this.detail}`;
     }
+  }
+}
+
+export class ThreadBaseBranchError extends Schema.TaggedError<ThreadBaseBranchError>()(
+  "ThreadBaseBranchError",
+  { project: Schema.String },
+) {
+  override get message(): string {
+    return `Could not read the checked-out branch of '${this.project}'. Pass --base.`;
+  }
+}
+
+export class ThreadStartFailedError extends Schema.TaggedError<ThreadStartFailedError>()(
+  "ThreadStartFailedError",
+  { detail: Schema.String },
+) {
+  override get message(): string {
+    return `Could not start the thread: ${this.detail}`;
   }
 }
 
@@ -404,7 +429,70 @@ const connectLiveServer = Effect.fn("connectThreadCliServer")(function* (
           typeof client.orchestration.dispatch
         >[0]),
       ),
+    /**
+     * Sends a turn start over the WebSocket RPC. Only that transport runs a
+     * `bootstrap` (thread creation, worktree checkout, setup script); the HTTP
+     * dispatch ignores it. Waits for the checkout, so it has no request timeout.
+     */
+    dispatchBootstrap: (
+      command: Extract<ClientOrchestrationCommand, { type: "thread.turn.start" }>,
+    ) =>
+      RpcClient.make(WsRpcGroup).pipe(
+        Effect.flatMap((rpc) => rpc[ORCHESTRATION_WS_METHODS.dispatchCommand](command)),
+        Effect.provide(webSocketRpcLayer(runtimeState.value.origin, headers)),
+        Effect.scoped,
+        Effect.mapError(
+          (error) =>
+            new ThreadStartFailedError({
+              detail: "message" in error && error.message ? error.message : String(error),
+            }),
+        ),
+      ),
   };
+});
+
+const webSocketRpcLayer = (origin: string, headers: Record<string, string>) => {
+  const url = new URL("/ws", origin);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return RpcClient.layerProtocolSocket().pipe(
+    Layer.provide(
+      Socket.layerWebSocket(url.toString()).pipe(
+        Layer.provide(
+          Layer.succeed(
+            Socket.WebSocketConstructor,
+            (socketUrl, protocols) =>
+              // Socket.makeWebSocket only ever passes its `protocols` option here.
+              new NodeSocket.NodeWS.WebSocket(
+                socketUrl,
+                protocols as string | string[] | undefined,
+                {
+                  headers,
+                },
+              ) as unknown as globalThis.WebSocket,
+          ),
+        ),
+      ),
+    ),
+    Layer.provide(RpcSerialization.layerJson),
+  );
+};
+
+/** The branch checked out in `cwd`; fails on a detached HEAD. */
+const readCheckedOutBranch = Effect.fn("readCheckedOutBranch")(function* (cwd: string) {
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const branch = yield* spawner
+    .string(
+      ChildProcess.make("git", ["symbolic-ref", "--quiet", "--short", "HEAD"], {
+        cwd,
+        stdin: "ignore",
+        stderr: "ignore",
+      }),
+    )
+    .pipe(
+      Effect.map((stdout) => stdout.trim()),
+      Effect.orElseSucceed(() => ""),
+    );
+  return branch.length > 0 ? branch : yield* new ThreadBaseBranchError({ project: cwd });
 });
 
 type LiveServer = Effect.Success<ReturnType<typeof connectLiveServer>>;
@@ -653,10 +741,22 @@ const threadStartCommand = Command.make("start", {
     ),
     Flag.optional,
   ),
+  worktree: Flag.Boolean("worktree").pipe(
+    Flag.withDescription(
+      "Run the thread in a new git worktree on its own branch, like New Worktree in the app. Without it the thread runs in the project folder.",
+    ),
+    Flag.withDefault(false),
+  ),
+  base: Flag.String("base").pipe(
+    Flag.withDescription(
+      "Branch the new worktree starts from. Default: the branch checked out in the project folder.",
+    ),
+    Flag.optional,
+  ),
   wait: waitFlag,
 }).pipe(
   Command.withDescription(
-    "Start a thread with a first message and print its id. The thread runs in the project folder, not a new worktree.",
+    "Start a thread with a first message and print its id. The thread runs in the project folder unless --worktree is set.",
   ),
   Command.withHandler((flags) =>
     runWithLiveServer(flags, (server, config) =>
@@ -687,21 +787,14 @@ const threadStartCommand = Command.make("start", {
         const title = truncate(text);
         const runtimeMode = projectSettings.defaultRuntimeMode;
         const createdAt = DateTime.formatIso(yield* DateTime.now);
-        yield* server.dispatch({
-          type: "thread.create",
-          commandId: CommandId.make(yield* threadCliUuid),
-          threadId,
-          projectId: project.id,
-          title,
-          modelSelection,
-          runtimeMode,
-          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-          branch: null,
-          worktreePath: null,
-          createdAt,
-        });
-        yield* server
-          .dispatch({
+        if (flags.worktree) {
+          const baseBranch = Option.isSome(flags.base)
+            ? flags.base.value
+            : yield* readCheckedOutBranch(project.workspaceRoot);
+          const branchToken = yield* threadCliUuid;
+          // The same bootstrap the composer sends for New Worktree. The server
+          // deletes the thread itself if the bootstrap fails.
+          yield* server.dispatchBootstrap({
             type: "thread.turn.start",
             commandId: CommandId.make(yield* threadCliUuid),
             threadId,
@@ -710,23 +803,70 @@ const threadStartCommand = Command.make("start", {
             titleSeed: title,
             runtimeMode,
             interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+            bootstrap: {
+              createThread: {
+                projectId: project.id,
+                title,
+                modelSelection,
+                runtimeMode,
+                interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+                branch: baseBranch,
+                worktreePath: null,
+                createdAt,
+              },
+              prepareWorktree: {
+                projectCwd: project.workspaceRoot,
+                baseBranch,
+                requireWorktree: true,
+                branch: buildTemporaryWorktreeBranchName(() => branchToken),
+                ...(projectSettings.newWorktreesStartFromOrigin ? { startFromOrigin: true } : {}),
+              },
+              runSetupScript: true,
+            },
             createdAt,
-          })
-          .pipe(
-            // Do not leave an empty thread behind.
-            Effect.tapError(() =>
-              threadCliUuid.pipe(
-                Effect.flatMap((commandId) =>
-                  server.dispatch({
-                    type: "thread.delete",
-                    commandId: CommandId.make(commandId),
-                    threadId,
-                  }),
+          });
+        } else {
+          yield* server.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make(yield* threadCliUuid),
+            threadId,
+            projectId: project.id,
+            title,
+            modelSelection,
+            runtimeMode,
+            interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+            branch: null,
+            worktreePath: null,
+            createdAt,
+          });
+          yield* server
+            .dispatch({
+              type: "thread.turn.start",
+              commandId: CommandId.make(yield* threadCliUuid),
+              threadId,
+              message: { messageId, role: "user", text, attachments: [] },
+              modelSelection,
+              titleSeed: title,
+              runtimeMode,
+              interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+              createdAt,
+            })
+            .pipe(
+              // Do not leave an empty thread behind.
+              Effect.tapError(() =>
+                threadCliUuid.pipe(
+                  Effect.flatMap((commandId) =>
+                    server.dispatch({
+                      type: "thread.delete",
+                      commandId: CommandId.make(commandId),
+                      threadId,
+                    }),
+                  ),
+                  Effect.ignore({ log: true }),
                 ),
-                Effect.ignore({ log: true }),
               ),
-            ),
-          );
+            );
+        }
         if (!flags.wait) {
           return threadId;
         }
