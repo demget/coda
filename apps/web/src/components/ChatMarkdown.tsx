@@ -139,6 +139,7 @@ import { GitHubIcon } from "./Icons";
 import { createIncrementalHighlightedDocument } from "../lib/incrementalHighlighting";
 import { HighlightedCodeLines } from "./chat/HighlightedCodeLines";
 import { RenderErrorBoundary } from "./RenderErrorBoundary";
+import { useFilePathExistence } from "../hooks/useFilePathExistence";
 import { useTheme } from "../hooks/useTheme";
 import { getClientSettings, useClientSettings } from "../hooks/useSettings";
 import {
@@ -2436,13 +2437,35 @@ function useChatMarkdownState({
     }
     return metaByText;
   }, [cwd, imageBaseDir, text]);
-  const fileLinkParentSuffixByPath = useMemo(() => {
+  const candidateFilePaths = useMemo(() => {
     const filePaths = [
       ...[...markdownFileLinkMetaByHref.values()].map((meta) => meta.filePath),
       ...[...inlineCodeFileLinkMetaByText.values()].map((meta) => meta.filePath),
     ];
-    return buildFileLinkParentSuffixByPath(filePaths);
+    return [...new Set(filePaths)];
   }, [inlineCodeFileLinkMetaByText, markdownFileLinkMetaByHref]);
+  const fileLinkParentSuffixByPath = useMemo(
+    // Labels stay computed over every candidate, so a path that resolves later
+    // keeps the disambiguating parent it renders with now.
+    () => buildFileLinkParentSuffixByPath(candidateFilePaths),
+    [candidateFilePaths],
+  );
+  const filePathStatus = useFilePathExistence(environmentId, cwd, candidateFilePaths);
+  /**
+   * Path-shaped text only becomes a file chip once the environment confirms
+   * the file is there. While the answer is outstanding the text renders as
+   * written, so a model id like `deepseek/deepseek-v3.2` never flashes as a
+   * link it cannot open. Paths the render found but the text scan did not —
+   * so no verdict was ever requested — keep the heuristic's answer.
+   */
+  const isOpenableFile = useCallback(
+    (fileLinkMeta: MarkdownFileLinkMeta) => {
+      if (!candidateFilePaths.includes(fileLinkMeta.filePath)) return true;
+      const status = filePathStatus(fileLinkMeta.filePath);
+      return status === "exists" || status === "unverified";
+    },
+    [candidateFilePaths, filePathStatus],
+  );
   const markdownUrlTransform = useCallback((href: string) => {
     if (parseAssistantCitationHref(href)) return href;
     if (parseComposerContextHref(href)) return href;
@@ -2698,6 +2721,7 @@ function useChatMarkdownState({
       headingLevelOffset,
       imageBaseDir,
       inlineCodeFileLinkMetaByText,
+      isOpenableFile,
       isStreaming,
       linkTargetPreference,
       markdownFileLinkMetaByHref,
@@ -2729,6 +2753,7 @@ function useChatMarkdownState({
       headingLevelOffset,
       imageBaseDir,
       inlineCodeFileLinkMetaByText,
+      isOpenableFile,
       isStreaming,
       linkTargetPreference,
       markdownFileLinkMetaByHref,
@@ -2889,6 +2914,7 @@ const CHAT_MARKDOWN_COMPONENTS = {
       serverConfig,
       updateThreadPullRequestLink,
       fileLinkChip,
+      isOpenableFile,
       renderContextReference,
     } = use(ChatMarkdownRendererContext);
     const citation = href ? parseAssistantCitationHref(href) : null;
@@ -3101,6 +3127,12 @@ const CHAT_MARKDOWN_COMPONENTS = {
       );
     }
 
+    if (!isOpenableFile(fileLinkMeta)) {
+      // A link to a file that is not there opens nothing, and its href is a
+      // filesystem path the browser would try to navigate to — keep the
+      // label, drop the link.
+      return <span className={props.className}>{children}</span>;
+    }
     return fileLinkChip(
       fileLinkMeta,
       `[${fileLinkMeta.basename}](${normalizedHref})`,
@@ -3108,7 +3140,7 @@ const CHAT_MARKDOWN_COMPONENTS = {
     );
   },
   code: function MarkdownCode({ node, children, className, ...props }) {
-    const { cwd, imageBaseDir, inlineCodeFileLinkMetaByText, fileLinkChip } = use(
+    const { cwd, imageBaseDir, inlineCodeFileLinkMetaByText, fileLinkChip, isOpenableFile } = use(
       ChatMarkdownRendererContext,
     );
     if (node?.properties?.dataInlineCode != null) {
@@ -3116,7 +3148,7 @@ const CHAT_MARKDOWN_COMPONENTS = {
       const fileLinkMeta =
         inlineCodeFileLinkMetaByText.get(codeText.trim()) ??
         resolveInlineCodeFileLinkMeta(codeText, cwd, imageBaseDir ?? cwd);
-      if (fileLinkMeta) {
+      if (fileLinkMeta && isOpenableFile(fileLinkMeta)) {
         return fileLinkChip(
           fileLinkMeta,
           `\`${codeText}\``,
