@@ -90,7 +90,7 @@ it("reports a newer installed service and tells the CLI to catch up to it", () =
     "0.0.31",
   );
 
-  assert.include(output, "t3@0.0.32-nightly.1 (newer than this t3@0.0.31 CLI)");
+  assert.include(output, "coda@0.0.32-nightly.1 (newer than this coda@0.0.31 CLI)");
   assert.include(output, "Run `t3 update 0.0.32-nightly.1` to match it");
   assert.notInclude(output, "npx");
 });

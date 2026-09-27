@@ -116,8 +116,8 @@ describe("ProjectSetupScriptRunner", () => {
         cwd: "/repo/worktrees/a",
         worktreePath: "/repo/worktrees/a",
         env: {
-          T3CODE_PROJECT_ROOT: "/repo/project",
-          T3CODE_WORKTREE_PATH: "/repo/worktrees/a",
+          CODA_PROJECT_ROOT: "/repo/project",
+          CODA_WORKTREE_PATH: "/repo/worktrees/a",
           NO_COLOR: "1",
           FORCE_COLOR: "0",
         },
