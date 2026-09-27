@@ -1238,7 +1238,9 @@ function toSessionKey(threadId: string, terminalId: string): string {
 
 function shouldExcludeTerminalEnvKey(key: string): boolean {
   const normalizedKey = key.toUpperCase();
-  if (normalizedKey.startsWith("CODA_")) {
+  // The fork still reads some upstream-named variables, such as
+  // T3CODE_DEV_AUTH_TOKEN, so both prefixes stay out of user terminals.
+  if (normalizedKey.startsWith("CODA_") || normalizedKey.startsWith("T3CODE_")) {
     return true;
   }
   if (normalizedKey.startsWith("VITE_")) {
