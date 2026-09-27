@@ -158,95 +158,12 @@ jobs:
           vp run --filter @t3tools/desktop typecheck
           vp run --filter @t3tools/web typecheck
 
-  build_wsl_runtime:
-    name: Build WSL runtime
+  build_desktop:
+    name: Build macOS arm64
     needs: [source, validate]
     if: needs.source.outputs.should_release == 'true' && needs.validate.result == 'success'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - name: Checkout release source
-        shell: bash
-        env:
-          CHECKOUT_REF: ${{ needs.source.outputs.sha }}
-          GIT_TERMINAL_PROMPT: "0"
-        run: |
-          set -euo pipefail
-          git init .
-          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
-          git fetch --no-tags --depth=1 origin "$CHECKOUT_REF"
-          git sparse-checkout set --no-cone '/*' '!/.repos/'
-          git checkout --detach "$CHECKOUT_REF"
-
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            args:
-              - --filter=coda...
-              - --filter=@t3tools/scripts...
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Align package versions
-        env:
-          OFFICIAL_TAG: ${{ needs.source.outputs.official_tag }}
-        run: node scripts/update-release-package-versions.ts "${OFFICIAL_TAG#v}"
-
-      - name: Build server and resource monitor
-        run: |
-          vp run --filter coda build
-          vp run build:resource-monitor
-          mkdir -p cli-resource-monitor/linux-x64
-          cp native/resource-monitor/target/release/t3-resource-monitor cli-resource-monitor/linux-x64/
-
-      - name: Build Linux single-executable
-        env:
-          VP_NODE_VERSION: "26.8.2"
-        run: node apps/server/scripts/cli.ts build-exe --verbose
-
-      - name: Package and verify WSL runtime
-        env:
-          OFFICIAL_TAG: ${{ needs.source.outputs.official_tag }}
-        run: |
-          node scripts/build-cli-archive.ts --platform linux --arch x64 \
-            --version "${OFFICIAL_TAG#v}" --resource-monitor-dir cli-resource-monitor \
-            --output-dir wsl-runtime
-          node scripts/smoke-cli-archive.ts --archive wsl-runtime/*.tar.gz --expect-version "${OFFICIAL_TAG#v}"
-
-      - name: Upload WSL runtime
-        uses: actions/upload-artifact@v7
-        with:
-          name: wsl-runtime-x64
-          path: wsl-runtime/*.tar.gz
-          if-no-files-found: error
-          retention-days: 3
-
-  build_desktop:
-    name: Build ${{ matrix.label }}
-    needs: [source, build_wsl_runtime]
-    if: needs.source.outputs.should_release == 'true' && needs.build_wsl_runtime.result == 'success'
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-15
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: macOS arm64
-            runner: macos-15
-            platform: mac
-            target: dmg
-            arch: arm64
-            rust_target: aarch64-apple-darwin
-          - label: Windows x64
-            runner: windows-2025
-            platform: win
-            target: nsis
-            arch: x64
-            rust_target: x86_64-pc-windows-msvc
     steps:
       - name: Checkout release source
         shell: bash
@@ -275,31 +192,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.rust_target }}
-
-      - name: Download WSL runtime
-        if: matrix.platform == 'win'
-        uses: actions/download-artifact@v7
-        with:
-          name: wsl-runtime-x64
-          path: wsl-runtime
-
-      - name: Install Spectre-mitigated MSVC libraries
-        if: matrix.platform == 'win'
-        shell: pwsh
-        run: |
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $installPath = & $vswhere -products * -latest -property installationPath
-          $setupExe = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
-          $process = Start-Process -FilePath $setupExe `
-            -ArgumentList "modify", "--installPath", "`"$installPath`"", "--add", `
-            "Microsoft.VisualStudio.Component.VC.Tools.x86.x64.Spectre", "--quiet", "--norestart" `
-            -Wait -PassThru -NoNewWindow
-          if ($null -eq $process -or $process.ExitCode -ne 0) {
-            $code = if ($null -ne $process) { $process.ExitCode } else { 1 }
-            Write-Error "Visual Studio Installer failed with exit code $code"
-            exit $code
-          }
+          targets: aarch64-apple-darwin
 
       - name: Align package versions
         shell: bash
@@ -312,20 +205,8 @@ jobs:
         env:
           CODA_DESKTOP_UPDATE_REPOSITORY: ${{ github.repository }}
         run: |
-          set -euo pipefail
-          args=(
-            --platform "${{ matrix.platform }}"
-            --target "${{ matrix.target }}"
-            --arch "${{ matrix.arch }}"
-            --build-version "${{ needs.source.outputs.version }}"
-            --verbose
-          )
-          if [[ "${{ matrix.platform }}" == "mac" ]]; then
-            args+=(--mac-updater-adhoc)
-          elif [[ "${{ matrix.platform }}" == "win" ]]; then
-            args+=(--wsl-runtime "$GITHUB_WORKSPACE"/wsl-runtime/*.tar.gz)
-          fi
-          vp run dist:desktop:artifact "${args[@]}"
+          vp run dist:desktop:artifact --platform mac --target dmg --arch arm64 \
+            --build-version "${{ needs.source.outputs.version }}" --mac-updater-adhoc --verbose
 
       - name: Collect release assets
         shell: bash
@@ -333,23 +214,18 @@ jobs:
           set -euo pipefail
           mkdir -p release-publish
           shopt -s nullglob
-          for pattern in "release/*.dmg" "release/*.zip" "release/*.exe" "release/*.blockmap" "release/*.yml"; do
+          for pattern in "release/*.dmg" "release/*.zip" "release/*.blockmap" "release/*.yml"; do
             for file in $pattern; do
               cp "$file" release-publish/
             done
           done
-          if [[ "${{ matrix.platform }}" == "mac" ]]; then
-            test -f release-publish/nightly-mac.yml
-            compgen -G 'release-publish/*.dmg' >/dev/null
-          else
-            test -f release-publish/nightly.yml
-            compgen -G 'release-publish/*.exe' >/dev/null
-          fi
+          test -f release-publish/nightly-mac.yml
+          compgen -G 'release-publish/*.dmg' >/dev/null
 
       - name: Upload desktop assets
         uses: actions/upload-artifact@v7
         with:
-          name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          name: desktop-mac-arm64
           path: release-publish/*
           if-no-files-found: error
           retention-days: 3
@@ -380,11 +256,9 @@ jobs:
           RELEASE_VERSION: ${{ needs.source.outputs.version }}
         run: |
           set -euo pipefail
-          test -f "$RUNNER_TEMP/release-assets/nightly.yml"
           test -f "$RUNNER_TEMP/release-assets/nightly-mac.yml"
-          compgen -G "$RUNNER_TEMP/release-assets/*.exe" >/dev/null
           compgen -G "$RUNNER_TEMP/release-assets/*.dmg" >/dev/null
-          notes="Coda desktop built from ${RELEASE_SHA:0:7}, synced through official $OFFICIAL_TAG. Install the macOS DMG manually once; later nightly versions update in-app. The macOS build uses an updater-compatible ad-hoc signature and is not Apple-notarized. The Windows x64 build is unsigned."
+          notes="Coda desktop for macOS (Apple silicon), built from ${RELEASE_SHA:0:7}, synced through official $OFFICIAL_TAG. Install the DMG manually once; later nightly versions update in-app. The build uses an updater-compatible ad-hoc signature and is not Apple-notarized."
           gh release create "$RELEASE_TAG" "$RUNNER_TEMP"/release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$RELEASE_SHA" \

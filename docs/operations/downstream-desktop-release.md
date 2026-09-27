@@ -46,13 +46,12 @@ registry owned by this fork.
 
 ## Platforms and signing
 
-- macOS: Apple Silicon (`arm64`) DMG and updater ZIP.
-- Windows: x64 NSIS installer, updater metadata, and a self-contained Linux x64 runtime for the
-  packaged WSL backend.
+Coda ships only for macOS on Apple Silicon (`arm64`): a DMG and an updater ZIP. The fork builds no
+Windows, Linux, or mobile clients.
 
-macOS builds use an ad-hoc signature for updater compatibility and are not Apple-notarized.
-Install the DMG manually once; subsequent nightly releases can update in-app. Windows builds are
-unsigned. Gatekeeper and SmartScreen can warn on first launch.
+The build uses an ad-hoc signature for updater compatibility and is not Apple-notarized. Install
+the DMG manually once; subsequent nightly releases can update in-app. Gatekeeper can warn on first
+launch.
 
 ## GitHub configuration
 
