@@ -147,7 +147,8 @@ const CODEX_DRIVER_KIND = ProviderDriverKind.make("codex");
 const CLAUDE_DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
 const CURSOR_DRIVER_KIND = ProviderDriverKind.make("cursor");
 const GROK_DRIVER_KIND = ProviderDriverKind.make("grok");
-const KIMI_DRIVER_KIND = ProviderDriverKind.make("kimi");
+const PI_DRIVER_KIND = ProviderDriverKind.make("pi");
+const ACP_REGISTRY_DRIVER_KIND = ProviderDriverKind.make("acpRegistry");
 const OPENCODE_DRIVER_KIND = ProviderDriverKind.make("opencode");
 
 export const DEFAULT_MODEL = "gpt-6-astra";
@@ -173,7 +174,9 @@ export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, strin
   [CURSOR_DRIVER_KIND]: "auto",
   // Product slug, not an ACP model id. The Grok adapter treats it as "the session's current model".
   [GROK_DRIVER_KIND]: "grok-build",
-  [KIMI_DRIVER_KIND]: "kimi-code/k3",
+  [ACP_REGISTRY_DRIVER_KIND]: "default",
+  // "default" defers to the user's own Pi settings.json model selection.
+  [PI_DRIVER_KIND]: "default",
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
   [ProviderDriverKind.make("antigravity")]: ANTIGRAVITY_DEFAULT_MODEL,
 };
@@ -212,15 +215,6 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Partial<
     "opus-4.5-thinking": "claude-opus-4-5",
     "opus-4.5": "claude-opus-4-5",
   },
-  // Kimi Code advertises fully-qualified `<provider>/<model>` ids over ACP.
-  // Accept the bare model names users actually type.
-  [KIMI_DRIVER_KIND]: {
-    k3: "kimi-code/k3",
-    "kimi-k3": "kimi-code/k3",
-    "k2.7": "kimi-code/kimi-for-coding",
-    "kimi-for-coding": "kimi-code/kimi-for-coding",
-    "kimi-for-coding-highspeed": "kimi-code/kimi-for-coding-highspeed",
-  },
   [OPENCODE_DRIVER_KIND]: {},
 };
 
@@ -232,6 +226,7 @@ export const PROVIDER_DISPLAY_NAMES: Partial<Record<ProviderDriverKind, string>>
   [CLAUDE_DRIVER_KIND]: "Claude",
   [CURSOR_DRIVER_KIND]: "Cursor",
   [GROK_DRIVER_KIND]: "Grok",
-  [KIMI_DRIVER_KIND]: "Kimi",
+  [ACP_REGISTRY_DRIVER_KIND]: "ACP Registry",
+  [PI_DRIVER_KIND]: "Pi",
   [OPENCODE_DRIVER_KIND]: "OpenCode",
 };
